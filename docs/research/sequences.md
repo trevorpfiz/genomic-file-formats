@@ -7,6 +7,7 @@ Research notes for the "Genomic File Formats" course, covering the FASTA and FAS
 - **[verified: test]**: I ran the snippet through samtools/htslib 1.24 (via pysam 0.24.1) or Biopython 1.88 in a scratch environment on 2026-10-16. The tool output is quoted.
 - **[verified: GRCh38]**: I read it from real GRCh38 index files, or fetched it by HTTP byte-range from the real FASTA files (see Sources).
 - **[from memory - verify]**: the claim relies on my memory because the primary source could not be reached. Check it before the claim ships.
+- **[verified: source]**: read directly in the tool's source code (added during fact-checking; see the Verification log).
 
 There is **no formal FASTA specification** and **no standards-body FASTQ specification**. The de facto rules come from three places:
 
@@ -128,7 +129,7 @@ The fragment is chrM:1-150.
 - R1 reads the first 36 bases forward.
 - R2 reads chrM:115-150 as its reverse complement, which is typical of Illumina paired-end reads.
 
-The header's name and comment are separated by a **single space**. There are no tabs in FASTQ.
+In Illumina headers the name and comment are separated by a **single space**. Sequence and quality lines never contain spaces or tabs (Cock README test files `error_spaces`, `error_tabs`). A header *can* contain TABs, though: `samtools fastq -T` writes copied SAM tags into the comment TAB-separated (`@r1<TAB>RG:Z:x<TAB>BC:Z:ACGT`) [verified: test, samtools 1.24]. Every tool still takes the read ID to be the text up to the first space or TAB.
 
 `R1` (file `P042_S1_L001_R1_001.fastq.gz`):
 
@@ -157,7 +158,7 @@ FFFFF:FFFFFFFFFFFFFFFFFF:FFFF,FFF::F
 
 Biopython decodes R1 to Q37 everywhere except Q25 at base 16 and Q11 at base 32. The expected number of errors in the read, ΣP, is 0.089. [verified: test]
 
-The quality alphabet here (`F`, `:`, `,`, and `#` for very low quality) is typical of binned-quality Illumina instruments such as NovaSeq. [from memory - verify which instruments bin, and to which values]
+The quality alphabet here (`F`, `:`, `,`, and `#` for very low quality, i.e. Q37, Q25, Q11, Q2) is typical of binned-quality NovaSeq 6000 output. [from memory - verify which instruments bin, and to which values. WebSearch snippets (a user blog and a QIIME2 forum thread; Illumina pages unreachable) report NovaSeq 6000 FASTQ containing only `,` `:` `F` (Q11/Q25/Q37) plus `#` (Q2), while an Illumina technical note lists the bins as Q2/Q12/Q23/Q37. NovaSeq X uses a different, three-level binning. Note that `case.md` gives the trio's headers as `@LH00417:...` (NovaSeq X style), so harmonise the instrument and quality alphabet across notes.]
 
 **Illumina read-name fields (CASAVA 1.8+ and BCL Convert style).** The layout below comes from an Illumina BaseSpace help-page snippet seen via WebSearch; the page itself was unreachable. Field meanings are [from memory - verify] unless noted.
 
@@ -175,8 +176,8 @@ The quality alphabet here (`F`, `:`, `,`, and `#` for very low quality) is typic
 | x, y | `10004:1000` | Cluster coordinates on the tile. Duplicate markers use them to spot *optical* duplicates. |
 | UMI (optional) | | 8th colon field, present when UMIs are configured (from the WebSearch snippet) |
 | read | `1` / `2` | Mate number (R1 or R2) |
-| is_filtered | `N` | `Y` if the read *failed* the chastity/purity filter, `N` otherwise (Illumina doc snippet via WebSearch). Default demultiplexing writes only passing reads, so `N` is the usual value [from memory - verify]. |
-| control | `0` | 0 when no control bits are set, otherwise an even number. This comes from a community forum, not an Illumina specification. |
+| is_filtered | `N` | `Y` if the read *failed* the chastity/purity filter, `N` otherwise (Illumina doc snippet via WebSearch). htslib agrees: when parsing CASAVA comments it sets the SAM `QCFAIL` flag (0x200) exactly when this field is `Y` (`sam.c`; `samtools import -i`) [verified: source]. Default demultiplexing writes only passing reads, so `N` is the usual value [from memory - verify]. |
+| control | `0` | 0 when no control bits are set, otherwise an even number. WebSearch snippets attribute this wording to Illumina's own BaseSpace "FASTQ files" help page (which adds that HiSeq X does not perform control specification, so the value is always 0 there); the page itself was unreachable [snippet only - verify]. |
 | index | `ACGTACGT+TGCATGCA` | Index (barcode) read sequence(s). Dual indexes are joined by `+`. Some Illumina docs say a sample number is written here and the index sequence only in Undetermined files (from the WebSearch snippet). |
 
 **Older read-name formats** [from memory - verify]:
@@ -193,7 +194,12 @@ A `.gzi` file is binary and little-endian, and contains no text (from htslib `bg
 1. a uint64 count *n*;
 2. *n* pairs of uint64 values (compressed offset, uncompressed offset), one pair per BGZF block start after the first block. The first block is implicitly at (0, 0).
 
-For a bgzipped 200 kb FASTA, `.gzi` held 3 entries: (20658, 65280), (41263, 130560) and (61963, 195840). Every block holds 65,280 uncompressed bytes. [verified: test]
+For a bgzipped 200 kb FASTA, `.gzi` held 3 entries. The uncompressed offsets depend on the compressor [verified: test, htslib 1.24 `bgzip` built from the release tarball, plus pysam 0.24.1]:
+
+- `bgzip --binary`, or pysam's `tabix_compress`: (20658, 65280), (41263, 130560), (61963, 195840). Every block except the last holds exactly 65,280 (0xFF00) uncompressed bytes. The format itself is also documented in bgzip(1), section "GZI FORMAT".
+- `bgzip` 1.24 with default settings: (20642, 65225), (41248, 130495), (61931, 195765). Since htslib 1.16, bgzip ends each block on a newline when the input is text (bgzip(1), `--binary`), so blocks hold slightly fewer, unequal byte counts. Here 65,225 = 16-byte header + 1,069 full 61-byte lines.
+
+Teach the layout, not a fixed block size: never compute block boundaries as multiples of 65,280.
 
 The `.fai` of a bgzipped file still uses **uncompressed** offsets: `chrZ 200000 16 60 61`. Lookup works in two steps: the `.fai` arithmetic gives an uncompressed offset, then the `.gzi` gives the block to decompress.
 
@@ -244,52 +250,54 @@ Severity labels:
 
 | ID | Rule | Severity | Source | Minimal violation |
 |---|---|---|---|---|
-| FA-S01 | The first non-blank line starts with `>` | error | faidx(5) "must be a text file of the form"; samtools 1.24 fails with `unexpected "#" at line 1` [verified: test]. Biopython 1.88 `fasta` rejects leading comment lines; `fasta-pearson` allows `;` comments (legacy). | `# my ref` before the first `>` |
+| FA-S01 | The first non-blank line starts with `>` (strict form: the first line starts with `>`) | error | faidx(5) "must be a text file of the form"; samtools 1.24 fails with `unexpected "#" at line 1` [verified: test]. Biopython 1.88 `fasta` rejects leading comment lines **and even a leading blank line** ("contains comments at the beginning of the file"), while samtools 1.24 skips leading blank lines; `fasta-pearson` allows `;`/`#` comments and blank lines (legacy) [verified: test]. A validator should treat a leading blank line as a warning. | `# my ref` before the first `>` |
 | FA-S02 | Every sequence line in a record has the same length, except that the last line may be shorter | error (for indexing) | faidx(5), FASTA Files section | Line 3 shorter than line 2, then more lines follow |
 | FA-S03 | No blank line inside a record's sequence. Blank lines *between* records are tolerated. | error (for indexing) | htslib `faidx.c` (blank line, then `Format error, unexpected "G"`) [verified: test] | `ACGT\n\nACGT` |
 | FA-S04 | Line terminators are consistent within a record | error (for indexing) | faidx(5) | `\r\n` on one line, `\n` on the next |
-| FA-S05 | No trailing spaces or tabs on sequence lines. They count as bytes, so the line widths no longer match. | error (for indexing) | Consequence of FA-S02 [verified: test] | `ACGTACGTAC ` (with a trailing space) |
+| FA-S05 | No spaces or tabs on sequence lines. Trailing whitespace counts as bytes, so the line widths no longer match. | error (for indexing) | Consequence of FA-S02 [verified: test]. Two htslib 1.24 subtleties [verified: test]: (1) a trailing space on the *final, shorter* line of a record is tolerated and not counted as a base; (2) an *internal* space is worse than an error, because faidx counts only non-space characters as bases (`ACGTA CGTAC` gives LINEBASES 10, LINEWIDTH 12), indexes the file, and then retrieval of `a:1-22` returns shifted sequence containing spaces with no warning. | `ACGTACGTAC ` (trailing space) on a line that is not the last |
 | FA-S06 | The header has a non-empty name | error | Implied by faidx(5): NAME = first word. samtools 1.24 *accepts* `>` with nothing after it and writes an index line with an **empty NAME column**. [verified: test] | `>` alone on a line |
-| FAI-S01 | `.fai` has 5 TAB-separated columns per line for FASTA, 6 for FASTQ | error | faidx(5) | 4 columns |
+| FAI-S01 | `.fai` has 5 TAB-separated columns per line for FASTA, 6 for FASTQ | error | faidx(5). htslib 1.24 rejects 4 columns (`Could not understand FASTA index`), but its loader is lenient otherwise: it splits on any whitespace (a space-separated `.fai` loads) and ignores extra columns [verified: test + `faidx.c` `fai_read`]. The course validator can be stricter than htslib. | 4 columns |
 | FAI-S02 | LINEWIDTH ≥ LINEBASES. Normally LINEWIDTH = LINEBASES+1 (LF) or +2 (CR-LF). | error | htslib `faidx.c` (`width ... less than base count`) | `chr1 100 6 60 59` |
 | FQ-S01 | Each record starts with a line beginning `@` | error | Cock 2010; Biopython (`should start with '@'`) [verified: test] | `>r1` used as a FASTQ title |
 | FQ-S02 | One or more sequence lines, then a line starting `+` | error | Cock 2010; htslib (`expecting '+'`) | `+` line missing |
 | FQ-S03 | The `+` line is bare, or repeats the `@` title *exactly* | error per Cock 2010 | Cock 2010 via its first author's Biopython docstring: "If it is repeated, it must be identical". Biopython rejects with `Sequence and quality captions differ`. **samtools fqidx 1.24 accepts it** [verified: test], so tools disagree. | `@r1` ... `+r9` |
 | FQ-S04 | Quality length equals sequence length | error | Cock 2010; Galaxy FAQ ("must have the same number of characters as line 2"); Biopython; htslib (`Quality line length too short`) [verified: test] | 36 bases, 35 quality characters |
-| FQ-S05 | Quality characters are printable ASCII 33-126 (`!` to `~`), with no spaces, tabs or control characters | error | Cock 2010 supplementary README (`error_qual_space`, `_tab`, `_null` ...); Biopython `InvalidCharError` [verified: test] | `II I` |
+| FQ-S05 | Quality characters are printable ASCII 33-126 (`!` to `~`), with no spaces, tabs or control characters. Sequence lines likewise contain no spaces or tabs. | error | Cock 2010 supplementary README (`error_qual_space`, `_tab`, `_null` ..., and `error_spaces`/`error_tabs`, which put the whitespace in both the sequence and quality lines); Biopython `InvalidCharError`; samtools fqidx also fails [verified: test] | `II I` |
 | FQ-S06 | The file is not truncated: the last record is complete | error | Cock README (`error_trunc_*` files); htslib (`File truncated`) | File ends after the `+` line |
 | FQ-S07 (indexed FASTQ only) | Multi-line quality is wrapped at exactly the same widths as the sequence | error (for indexing) | faidx(5), FASTQ Files section | Sequence 18+12, quality 15+15 |
-| GZ-S01 | A BGZF file is a series of gzip members with the `BC` extra field, ending in the 28-byte EOF block | error (for bgzip/faidx) | SAMv1 (v1.6, hts-specs master 510c107) §4.1, §4.1.2 | `gzip`-compressed reference: `Cannot index files compressed with gzip, please use bgzip` [verified: test] |
+| GZ-S01 | A BGZF file is a series of gzip members, each carrying the `BC` extra subfield | error (for bgzip/faidx) | SAMv1 (v1.6, hts-specs master 510c107) §4.1 | `gzip`-compressed reference: `Cannot index files compressed with gzip, please use bgzip` [verified: test] |
+| GZ-S02 | The BGZF file ends with the 28-byte EOF marker block | **warning** | SAMv1 §4.1.2 says the EOF block "**should** be written", not must. With the last 28 bytes removed, samtools faidx 1.24 still indexes and retrieves, printing only `[W::bgzf_read_block] EOF marker is absent. The input may be truncated` [verified: test]. | BGZF file with the final 28 bytes cut off |
 
 ### 5b. Semantic and consistency rules
 
 | ID | Rule | Severity | Source | Minimal violation |
 |---|---|---|---|---|
-| FA-M01 | Sequence names are unique within a file | warning (samtools); error for most pipelines | samtools-faidx(1) 1.24: indexing warns `Ignoring duplicate sequence`, and retrieval returns only the **first** sequence with that name [verified: test] | Two `>chrM_demo` records |
-| FA-M02 | Reference names obey the SAM reference-name character set: printable, none of `\ , " ' ( ) [ ] { } < >`, and not starting with `*` or `=` | error once the reference is used for SAM/BAM/CRAM/VCF | SAMv1 v1.6 §1.2.1. Note that `|` and `:` *are* allowed (NCBI-style names, HLA alleles). | `>chr1,primary` |
+| FA-M01 | Sequence names are unique within a file | warning (samtools); error for most pipelines | samtools-faidx(1) 1.24: indexing warns `Ignoring duplicate sequence`, and retrieval returns only the **first** sequence with that name [verified: test]. Once the names reach a SAM/BAM/CRAM header it is a MUST: "The SN tags ... in all @SQ lines must be distinct" (SAMv1 §1.3). | Two `>chrM_demo` records |
+| FA-M02 | Reference names obey the SAM reference-name character set: printable ASCII `!`-`~`, none of `` \ , " ` ' ( ) [ ] { } < > `` (the backtick is excluded too), and not starting with `*` or `=` | error once the reference is used for SAM/BAM/CRAM/VCF | SAMv1 v1.6 §1.2.1, regex `[0-9A-Za-z!#$%&+./:;?@^_\|~-][0-9A-Za-z!#$%&*+./:;=?@^_\|~-]*` (pipes escaped for this table). Note that `\|` and `:` *are* allowed (NCBI-style names, HLA alleles). samtools faidx itself indexes such names without complaint [verified: test]. | `>chr1,primary` |
 | FA-M03 | Records are non-empty | warning | samtools 1.24 **silently omits** an empty middle record from the `.fai`, but fails with `File truncated` if the empty record is last [verified: test] | `>chrUn_empty` followed directly by the next `>` |
 | FA-M04 | Names and lengths agree with every downstream file: BED, VCF `##contig`, BAM `@SQ` | error (pipeline) | `.fai` NAME/LENGTH = `@SQ SN/LN` (faidx(5)) | FASTA uses `chr1`, BED uses `1` |
 | FA-M05 | The `.fai` is rebuilt after *any* edit to the FASTA | error (silent!) | Follows from the OFFSET arithmetic. samtools 1.24 used a stale index **without warning** and returned header text as sequence (`first 60 b`) [verified: test]. | Header edited after indexing |
-| FA-M06 | Characters are valid IUPAC codes for the alphabet: nucleotide `ACGTURYKMSWBDHVN` and `-`; protein adds `*`, `X` and others | warning | NCBI FASTA description (snippet via WebSearch; page unreachable). SAMv1 §4.2.3 maps only `=ACMGRSVTWYHKDBN` and turns anything else into `N`. faidx counts any printable non-space character. | `ACGTJ` |
+| FA-M06 | Characters are valid IUPAC codes for the alphabet: nucleotide `ACGTURYKMSWBDHVN` and `-`; protein adds `*`, `X` and others | warning | NCBI FASTA description (snippet via WebSearch; page unreachable). For context, SAMv1 §4.2.3 (BAM *read* SEQ encoding) maps only `=ACMGRSVTWYHKDBN` and turns anything else into `N`. faidx counts any printable non-space character (`ACGTJ` indexes as length 5) [verified: test]. Real references do contain non-ACGTN IUPAC codes: GRCh38 chr1 has `M` at 248,752,514 and `R` at 248,755,122 [verified: GRCh38], so do not flag M/R/etc. as errors. | `ACGTJ` |
 | FA-M07 | Description metadata, if present, agrees with the sequence (for example `LN:`, `M5:` in Broad-style headers) | warning | Convention of the GRCh38 analysis set headers [verified: GRCh38]; no tool checks it | `LN:16569` on a 60 bp record |
-| FAI-M01 | OFFSETs increase in file order, and every row's numbers reproduce the file bytes | error | faidx(5) | Hand-edited `.fai` |
+| FAI-M01 | Every row's numbers reproduce the file bytes (OFFSET, LINEBASES, LINEWIDTH, LENGTH) | error (silent) | faidx(5) column definitions. A wrong OFFSET silently returns wrong bases (see FA-M05) [verified: test] | Hand-edited `.fai` with OFFSET off by one |
+| FAI-M02 | Rows appear in FASTA file order, so OFFSET increases down the file | convention | faidx(5) says only that rows "**typically**" appear in file order and are "typically sorted" by OFFSET. htslib 1.24 loads and uses an out-of-order `.fai` without complaint [verified: test]. | Rows for `b` then `a` |
 | FQ-M01 | Quality encoding matches what the consumer assumes. Modern data are Phred+33; legacy Illumina 1.3-1.7 are Phred+64. | error (silent misinterpretation) | Cock 2010; Biopython docs; fastp needs `-6/--phred64` to read +64 | Phred+64 file read as +33 gives Q71 values |
 | FQ-M02 | R1 and R2 files have the same record count, the same order, and matching names (ignoring a trailing `/1` `/2` and the comment) | error | bwa(1): the i-th read of each file forms a pair. bwa strips `/[0-9]` and aborts with `paired reads have different names` (`bwamem_pair.c`). | R2 is missing one record |
-| FQ-M03 | Interleaved files alternate R1, R2 with the same name | error | bwa `-p`: "If two adjacent reads have the same name, they are considered to form a read pair"; fastp `--interleaved_in` | R1, R1, R2, R2 order |
-| FQ-M04 | Read IDs are unique within a sample. To become SAM QNAMEs they must match `[!-?A-~]{1,254}`: at most 254 characters, and no `@` (ASCII 64 is excluded). | warning | SAMv1 v1.6 §1.4 | 300-character read ID |
+| FQ-M03 | Interleaved files alternate R1, R2 with the same name | error | bwa `-p`: "If two adjacent reads have the same name, they are considered to form a read pair"; fastp `--interleaved_in`. Note that with `-p` bwa does not abort on a broken order: reads whose neighbour has a different name are silently aligned as single-end (bwa(1)). | R1, R1, R2, R2 order |
+| FQ-M04 | Read IDs are unique within one FASTQ file (a read and its mate in the other file share an ID). To become SAM QNAMEs they must match `[!-?A-~]{1,254}`: at most 254 characters, and no `@` (ASCII 64 is excluded). | warning | SAMv1 v1.6 §1.4 | 300-character read ID |
 
 ### 5c. De facto conventions
 
 | ID | Convention | Severity | Source |
 |---|---|---|---|
-| FA-C01 | Wrap at 60-80 bases. Observed for GRCh38: UCSC 50, NCBI 70, Broad 100 [verified: GRCh38]. Unwrapped (one line) is also indexable. | convention | NCBI recommends < 80 characters (snippet) |
+| FA-C01 | Wrap at 60-80 bases. Observed for GRCh38: UCSC 50, NCBI 70, Broad 100 [verified: GRCh38; the "UCSC" and "NCBI" files are the iGenomes `UCSC/hg38` and `NCBI/GRCh38` copies, both 195-sequence no-alt analysis-set style files, not NCBI's own RefSeq/GenBank downloads]. Unwrapped (one line) is also indexable. | convention | NCBI recommends < 80 characters (snippet) |
 | FA-C02 | Extensions `.fa` `.fasta` `.fna` (nucleotide) `.faa` (protein) `.ffn` `.frn`; compressed `.fa.gz` | convention | [from memory - verify] |
 | FA-C03 | Uppercase, or lowercase meaning soft-masked repeats | convention | UCSC versus Broad GRCh38 [verified: GRCh38] |
 | FA-C04 | Final newline present. Its absence is tolerated by samtools [verified: test]. | convention | |
 | FQ-C01 | Exactly four lines per record (no wrapping) | convention, but treat violations as a warning | Cock README: the converted files are "standardised not to use line wrapping"; Biopython: "several sources discourage" wrapping |
 | FQ-C02 | Bare `+` line, to save space | convention | Cock README |
 | FQ-C03 | Illumina naming `Sample_S1_L001_R1_001.fastq.gz`, plus `I1`/`I2` index-read files | convention | [from memory - verify] |
-| FQ-C04 | No zero-length reads. Trimming can create them; Biopython accepts them [verified: test], but some downstream tools fail on them. | convention (warning) | fastp applies length filtering by default (`-l/--length_required`) |
+| FQ-C04 | No zero-length reads. Trimming can create them; Biopython accepts them [verified: test], but some downstream tools fail on them, including samtools fqidx 1.24 (`Inlined empty line is not allowed in sequence`) [verified: test]. | convention (warning) | fastp applies length filtering by default (`-l/--length_required`, default 15) |
 | FQ-C05 | Phred+33 (Sanger), including Illumina since CASAVA 1.8 | convention | Biopython QualityIO docs |
 
 ## 6. Recognition cues
@@ -299,7 +307,7 @@ Severity labels:
 | First byte | `>` (0x3E); rarely `;` (legacy Pearson comments) | `@` (0x40) | A SAM header also starts with `@`, but as `@HD`/`@SQ` plus a TAB. A `.dict` starts with `@HD`. |
 | Line pattern | header, then N sequence lines | 4-line cycle `@`, bases, `+`, qualities | The QUAL format (454) is FASTA-like but holds space-separated integers |
 | Alphabet | Nucleotides `ACGTN` (and IUPAC). Protein if `E F I L P Q` appear, since these are not nucleotide codes. | Bases on line 2, punctuation-rich line 4 | `.fai`/BED are TAB-separated numbers |
-| Tabs | None | None (a space separates the name from the comment) | `.fai`, BED, SAM and GFA are TAB-delimited |
+| Tabs | None in sequence lines (a header description may contain one; it ends the name) | None in sequence or quality lines. Illumina headers use a space; `samtools fastq -T` headers carry TAB-separated SAM tags | `.fai`, BED, SAM and GFA are TAB-delimited on every line |
 | Magic bytes when compressed | gzip `1f 8b 08`; BGZF `1f 8b 08 04 ... 06 00 42 43 02 00` (`BC` subfield) [verified: test] | Same | BAM is also BGZF; you have to decompress to tell them apart |
 | Extensions | `.fa .fasta .fna .faa .fa.gz` | `.fq .fastq .fq.gz .fastq.gz`, `_R1_`/`_R2_` | `.fai` = index, `.gzi` = binary index |
 
@@ -315,12 +323,12 @@ Severity labels:
 2. **"An empty sequence would cause an error."** Not if it is in the middle: samtools silently drops it from the `.fai`, and later lookups for that name fail far from the cause. [verified: test]
 3. **"Duplicate names are an error."** samtools only warns, and keeps the first. A pipeline can then silently use the wrong one of two `chrM` records. [verified: test]
 4. **"The `.fai` notices when the FASTA changes."** It did not in samtools 1.24: a stale index returned header text as bases, with no error. [verified: test]
-5. **"Lowercase means low quality or an error."** In a reference, lowercase means soft-masked repeat. It is the same base, and the MD5 used by SAM/CRAM is computed after uppercasing (SAMv1 §1.3.2), so UCSC and Broad chr1 share `M5:6aef897c3d6ff0c78aff06ac189178dd`.
+5. **"Lowercase means low quality or an error."** In a reference, lowercase means soft-masked repeat. It is the same base, and the MD5 used by SAM/CRAM is computed after uppercasing and stripping whitespace (SAMv1 §1.3.2), so soft-masking or re-wrapping a FASTA leaves every `M5` unchanged. **But do not conclude that UCSC and Broad chr1 are interchangeable:** their `M5`s differ. GRCh38 chr1 contains two IUPAC ambiguity codes, `M` at 248,752,514 and `R` at 248,755,122. The Broad and NCBI analysis-set copies keep them; the UCSC copy has `N` there. So Broad chr1 is `M5:6aef897c3d6ff0c78aff06ac189178dd` and UCSC chr1 (uppercased) is `2648ae1bacce4ec4b6cf337dcae37816` [verified: GRCh38, by hashing both full chr1 sequences and fetching the two positions; the UCSC value also matches that copy's `genome.dict`]. The likely reason is that UCSC's 2bit format stores only ACGTN [from memory - verify].
 6. **"`N` is a gap of known length."** `N` is an unknown base. Runs of `N` stand for gaps whose lengths are often estimated. GRCh38 chr1 begins with 10,000 `N`s before the telomere repeat. [verified: GRCh38]
 7. **"`chr1` and `1` are the same contig."** To humans they are; to tools they are different strings. Name mismatches between FASTA, BED and VCF are among the most common pipeline failures. The `M5` checksum lets tools tell when two differently-named sequences are the same.
 8. **"Every FASTQ record is 4 lines, so `split -l 4` or `wc -l / 4` is safe."** That holds only if nobody wrapped the file. Wrapped FASTQ is legal, and its quality lines can start with `@` or `+`. [verified: test]
-9. **"I can find records by searching for lines that start with `@`."** `@` is Q31 in Phred+33, so quality lines often start with it.
-10. **"Quality encoding can be detected from one read."** It can't: `IIIIIIII` is Q40 in Phred+33 and Q9 in Phred+64, and both are plausible. [verified: test] Scan thousands of reads and use the platform and date. FastQC's current code assumes Phred+33 unless told otherwise, and warns when the lowest character is ≥ 64. fastp needs `--phred64`.
+9. **"I can find records by searching for lines that start with `@`."** `@` is Q31 in Phred+33, so a quality line can start with it.
+10. **"Quality encoding can be detected from one read."** Only sometimes. A single read that contains any character below `;` (ASCII 59) proves Phred+33, because no 64-offset encoding can produce it. But a read like `IIIIIIII` is Q40 in Phred+33 and Q9 in Phred+64, and both are plausible [verified: test], so the absence of low characters proves nothing. Scan thousands of reads and use the platform and date. FastQC's current code assumes Phred+33 unless told otherwise, and warns when the lowest character is ≥ 64. fastp needs `--phred64`.
 11. **"Q30 means 30% error."** It means a 1-in-1,000 error probability. Every 10 Q points is a factor of 10.
 12. **"R1 and R2 are matched by name."** Most aligners match them by **position** and use the names only as a sanity check. Filtering one file alone shifts every later pair; bwa aborts only if the names differ.
 13. **"`.gz` means I can index it."** Plain gzip cannot be indexed; it must be bgzip. [verified: test]
@@ -337,11 +345,13 @@ Separators: FASTA and FASTQ snippets contain **no TABs**; the FASTQ header uses 
 >chrM_demo first 60 bp of GRCh38 chrM
 GATCACAGGTCTATCACCCT
 ATTAACCACTCACGGG
-AGCTCTCCATGCATTTGGTATTTT
+AGCTCTCCATGCATTTGGTA
+TTTT
 ```
 
-- **Answer:** line 3. It is 16 bases in the middle of a record whose first line is 20, and only the last line may be shorter.
-- **Explanation:** samtools reports `Format error, unexpected "A" at line 4`. faidx treats a short line as the end of the record, so the next sequence line looks like junk. This teaches learners to read error messages one line back. Line 4 is also too long; fixing line 3 alone does not make the file valid.
+- **Answer:** line 3. It is 16 bases in the middle of a record whose first line is 20, and only the last line may be shorter. Lines 2 and 4 are 20 bases and line 5 is the (legally shorter) last line, so line 3 is the *only* offending line. The bases are still the first 60 bp of chrM.
+- **Explanation:** samtools 1.24 reports `Format error, unexpected "A" at line 4` [verified: test]. faidx treats a short line as the end of the record, so the next sequence line looks like junk. This teaches learners to read error messages one line back.
+- **Design note:** an earlier draft used lines of 20/16/24. That has two offenders (a 24-base line is longer than LINEBASES, which samtools reports as `Different line length in sequence 'chrM_demo' at line 4` once line 3 is padded), so it is unsuitable for a single-click exercise.
 
 **EX-02 (simulator: FAI byte calculator)**
 
@@ -395,14 +405,14 @@ GATCACAGGT
 
 - **Validator checks:** FA-S01 (first line), FA-S03 (blank line inside the sequence) and FA-M01 (duplicate name).
 - **Accepted answer:** delete line 1, delete the blank line, and delete or rename the second record (for example `>chrM_demo2`).
-- **Explanation:** the fixed file indexes to `chrM_demo	60	38	20	21` (TAB-separated). Fixing only the first two problems gives a file samtools *accepts*, with a duplicate warning. The validator should flag that as a warning-level pass.
+- **Explanation:** if the duplicate is deleted, the fixed file indexes to the single row `chrM_demo	60	38	20	21`; if it is renamed to `chrM_demo2`, a second row `chrM_demo2	10	128	10	11` follows (TAB-separated) [verified: test]. Fixing only the first two problems gives a file samtools *accepts*, with the warning `Ignoring duplicate sequence "chrM_demo"`. The validator should flag that as a warning-level pass.
 
 **EX-05 (sort: which format is this?)**
 
 Bins: nucleotide FASTA, protein FASTA, FASTQ, `.fai`, SAM header/`.dict`, BED, "invalid / can't tell". In items 3-5, TABs separate the columns.
 
 1. `>chr1_tel GRCh38 chr1:10001-10036 soft-masked` / `taaccctaac...` → nucleotide FASTA. Lowercase is soft-masking.
-2. `>sp|P69905|HBA_HUMAN Hemoglobin subunit alpha` / `MVLSPADKTNVKAAWGKVGAHAGEYGAEALERMF` → protein FASTA. `E`, `L`, `P`, `F` are not nucleotide codes. [Sequence and UniProt ID from memory - verify]
+2. `>sp|P69905|HBA_HUMAN Hemoglobin subunit alpha` / `MVLSPADKTNVKAAWGKVGAHAGEYGAEALERMF` → protein FASTA. `E`, `L`, `P`, `F` are not nucleotide codes. [UniProt ID and the first 34 residues match WebSearch snippets of UniProt/DrugBank P69905; rest.uniprot.org was blocked. The real UniProt header continues `OS=Homo sapiens OX=9606 GN=HBA1 PE=1 SV=2` [from memory - verify].]
 3. `@SQ	SN:chr1	LN:248956422	M5:6aef897c3d6ff0c78aff06ac189178dd` → SAM header/`.dict`, not FASTQ: `@` plus a two-letter code plus a TAB.
 4. `chr1	248956422	112	100	101` → `.fai`. As BED it would have start > end.
 5. `chr1	10000	10036` → BED.
@@ -441,8 +451,8 @@ Each file below was summarised over 10,000 reads.
 - **A is Phred+33 for certain.** Any character below `;` (59) is impossible in both 64-offset encodings.
 - **B is Phred+64 (Illumina 1.5-1.7).**
   - Read as +33, the values would reach Q71, which is implausible.
-  - The trailing `B` runs are the Illumina 1.5+ Q2 "read segment quality control indicator" [from memory - verify; this is in Cock 2010].
-- **C is Phred+33.** The low characters rule out +64. Q93 (`~`) is the Sanger maximum and is plausible for long-read consensus data such as PacBio HiFi [HiFi cap from memory - verify].
+  - The trailing `B` runs are the Illumina 1.5+ Q2 "Read Segment Quality Control Indicator" [from memory - verify; WebSearch snippets (FASTQ format pages, an Open Bioinformatics Foundation post) agree that in Illumina 1.5-1.7 output Q0-Q1 are unused and Q2 (`B`) marks a low-quality read tail to exclude downstream; neither Cock 2010 nor the Illumina manual could be opened].
+- **C is Phred+33.** The low characters rule out +64. Q93 (`~`) is the Sanger maximum and is plausible for long-read consensus data such as PacBio HiFi [HiFi cap from memory - verify; a Bioconductor support thread found via WebSearch reports PacBio FASTQ reaching Q93 `~`, but no PacBio documentation was reachable].
 
 **Distractor for C:** "the max > `J` means +64". This is wrong; maximum-based heuristics fail on long-read data.
 
@@ -465,12 +475,13 @@ FFFFFFFFFFFFFFF:FFFFFFFFFFFFFFF,FFF
 ```
 @A00123:8:H7KJ2DSXY:2:1101:10004:1000 1:N:0:ACGTACGT+TGCATGCA
 GATCACAGGTCTATCACCCTATTAACCACTCACGGG
-+A00123:8:H7KJ2DSXY:2:1101:10004:1001
++A00123:8:H7KJ2DSXY:2:1101:10004:1001 1:N:0:ACGTACGT+TGCATGCA
 FFFFFFFFFFFFFFF:FFFFFFFFFFFFFFF,FFFF
 ```
 
-- **Answer:** line 3. The repeated title differs (`1001` versus `1000`).
-- **Explanation:** Biopython rejects it, but samtools fqidx accepts it. Use this record to show that tools enforce different subsets of the rules.
+- **Answer:** line 3. The repeated title differs (`1001` versus `1000`); everything else on it, including the comment, matches line 1.
+- **Explanation:** Biopython rejects it (`Sequence and quality captions differ.`), but samtools fqidx accepts it [verified: test]. Use this record to show that tools enforce different subsets of the rules.
+- **Snippet note:** the `+` line must repeat the **whole** title, comment included. An earlier draft repeated only the read ID (`+A00123:...:1001` with no comment); Biopython rejects even the corrected `+A00123:...:1000` form of that for the missing comment, so it had two violations [verified: test].
 
 (c) The same record as (a), but with full-length quality and a first line starting with `>`.
 
@@ -526,7 +537,7 @@ A script removed reads containing `N` from `father_R2.fastq.gz` only. R1 now has
 
 - (a) bwa skips the unpaired read. *Wrong: bwa does not look for partners; it pairs records by position.*
 - (b) bwa aborts with `paired reads have different names` at the first shifted pair. ✔ *Correct: it pairs the i-th record of each file and checks the names after stripping `/1` `/2` (bwa source, `bwamem_pair.c`).*
-- (c) Alignment succeeds and every pair is mismatched. *This happens only if the names cannot detect the shift, for example after renaming to `read1`, `read2` and so on. It is why names matter.*
+- (c) Alignment succeeds and every pair after the removed read is mismatched. *This happens only if the names cannot detect the shift, for example after renaming to `read1`, `read2` and so on. It is why names matter.*
 - (d) bwa re-sorts R2 by name. *Wrong: no aligner does this.*
 
 The lesson: filter pairs together (fastp and cutadapt paired modes).
@@ -542,9 +553,9 @@ Bins and answers:
   - a `.fai` built before the header was edited.
 - **Warning:**
   - duplicate sequence names;
-  - an empty record;
-  - zero-length reads after trimming;
-  - Phred+64 data in 2026.
+  - an empty record in the *middle* of a FASTA (an empty *last* record makes samtools fail with `File truncated`, so do not use that variant here);
+  - zero-length reads after trimming (Biopython accepts them; samtools fqidx and some downstream tools reject them, see FQ-C04);
+  - a FASTQ that turns out to be Phred+64 in a 2026 delivery (a valid legacy FASTQ variant, but suspicious; it becomes the *error* FQ-M01 once a tool reads it as +33).
 - **Convention:**
   - lowercase reference bases;
   - wrapping at 60 versus 80;
@@ -591,7 +602,7 @@ Source: SAMv1 §1.3.2. The spec's own worked example hashes `ACGT ACGT ACGT / ac
 - **The file must be Phred+33.** ✔ *`5` (53) is below 59, which is impossible for Solexa+64 or Phred+64.*
 - **The best base is Q41.** ✔ *`J` is 74 − 33 = 41.*
 - The worst base is Q-11. ✘ *That is the Phred+64 reading, which is impossible here.*
-- **One record alone could not have proved this.** ✔ *Only if that record happened to contain a character below 59.*
+- One record alone could not have proved this. ✘ *A single record that contains a character below `;` (59), such as this file's `5`, already proves Phred+33. What one record cannot do is prove the encoding when all of its characters are ≥ 64 (e.g. `IIIIIIII`).*
 
 **Q5. (multi-select)** Header `@A00123:8:H7KJ2DSXY:2:1101:10004:1000 2:Y:0:ACGTACGT+TGCATGCA`. Which statements are true?
 
@@ -622,11 +633,13 @@ Source: SAMv1 §1.3.2. The spec's own worked example hashes `ACGT ACGT ACGT / ac
 - C. Records start with `>`. *That is FASTA.*
 - D. The `+` line always repeats the name. *It is optional.*
 
-**Q9. (single choice)** UCSC's and the Broad's GRCh38 chr1 differ in case (soft-masked versus uppercase) and in line width (50 versus 100). Will a CRAM written against one decode correctly with the other?
+**Q9. (single choice)** A trio CRAM was written against the Broad `Homo_sapiens_assembly38.fasta` (uppercase, 100 bases per line). A colleague soft-masked a copy of that same FASTA (repeats in lowercase) and re-wrapped it at 50 bases per line, then re-indexed it. Will the CRAM decode correctly with the colleague's copy?
 
 - A. No: the files differ byte-for-byte. *What CRAM checks is the sequence MD5, not the file bytes.*
-- B. **Yes, as long as the names match. The M5 checksums are identical because they are computed on uppercased sequence with whitespace removed.** *[The CRAM-side behaviour is from memory - verify in the CRAM lesson research.]*
-- C. Only if both have the same `.fai`. *The `.fai` files necessarily differ.*
+- B. **Yes. The M5 checksums are identical because they are computed on uppercased sequence with whitespace removed, and the names are unchanged.** *[verified: test, htslib 1.24 via pysam: a CRAM written against an uppercase 100-column reference decoded with 0 wrong bases using a soft-masked, 50-column copy.]*
+- C. Only if both have the same `.fai`. *The `.fai` files necessarily differ; each `.fai` describes its own file.*
+
+*Do not reword this as "UCSC versus Broad": their chr1 M5s differ (pitfall 5). In the same test, swapping one IUPAC `M` for `N` in the reference made htslib refuse to decode the slice: `MD5 checksum reference mismatch at chr1:1-2950 ... Please check the reference given is correct` [verified: test]. CRAMv3 stores an MD5 of the reference span in every slice header, and readers "are expected to check" it (CRAMv3 §8.5 "Slice header block", field `reference md5`; §11 "Reference sequences"). This makes a good follow-up "predict" item for the CRAM lesson.*
 
 ## 10. Case-thread hooks
 
@@ -634,7 +647,7 @@ Source: SAMv1 §1.3.2. The spec's own worked example hashes `ACGT ACGT ACGT / ac
   - **3,366 sequences** totalling 3,217,346,917 bases:
     - 25 primary (chr1-22, X, Y, M);
     - 42 unlocalized `_random`;
-    - 127 unplaced `chrUn_`;
+    - 127 unplaced `chrUn_` (not counting the decoys, which are also named `chrUn_..._decoy`);
     - 261 `_alt` haplotypes;
     - `chrEBV`;
     - 2,385 `_decoy`;
@@ -652,13 +665,13 @@ Source: SAMv1 §1.3.2. The spec's own worked example hashes `ACGT ACGT ACGT / ac
   1. `mother_R2.fastq.gz` is truncated in transit: the last record ends after `+`, and `gzip -t` fails. This trips FQ-S06 and FQ-M02.
   2. A reference copy has a `.fai` older than an edited header (FA-M05, the silent garbage case).
   3. A `ref.fa.gz` made with plain gzip (GZ-S01).
-  4. Optional twist: an archived 2010 Phred+64 FASTQ from an affected relative's earlier gene-panel test (FQ-M01).
+  4. Optional twist: an archived 2010 Phred+64 FASTQ from a relative's earlier research gene-panel run (FQ-M01). Do not call the relative "affected": the case is built around a *de novo* variant, and an affected relative would point learners toward inheritance instead.
 - **Forward links:**
   - The FASTQ first word becomes the SAM `QNAME`, and the qualities become `QUAL`.
   - The x/y fields drive optical-duplicate marking in the BAM lesson.
   - The FASTA `M5` becomes `@SQ M5` and is what CRAM needs to decode in the CRAM lesson.
   - FASTA names must match BED, VCF and GTF contig names in later lessons.
-  - The candidate seizure gene (chosen in the GTF lesson; e.g. SCN1A on chr2 [gene location from memory - verify]) is pulled from the FASTA with `samtools faidx` to show the actual exon sequence around the variant.
+  - The candidate seizure gene (chosen in the GTF lesson; e.g. SCN1A on chr2) is pulled from the FASTA with `samtools faidx` to show the actual exon sequence around the variant. `case.md` records SCN1A as `chr2:165,984,641-166,149,214`, minus strand, MANE Select ENST00000674923.1 [taken from case.md, where it is marked verified against GENCODE v43; Ensembl, UCSC and NCBI were all blocked here, so not re-checked independently]. Because the gene is on the minus strand, `samtools faidx` returns the reverse complement of its coding sequence unless `-i` is used.
 
 ## 11. "Read more" candidates
 
@@ -676,7 +689,7 @@ Source: SAMv1 §1.3.2. The spec's own worked example hashes `ACGT ACGT ACGT / ac
 - **CR-LF arithmetic:** LINEWIDTH = LINEBASES + 2, and OFFSET counts the `\r`. This is the faidx(5) worked example: `one 66 6 30 32`.
 - **Indexing FASTQ with `samtools fqidx`:** 6 columns. QUALOFFSET is the byte after the `+` line.
 - **BGZF internals:**
-  - 64 KiB blocks;
+  - blocks of at most 64 KiB both before and after compression (SAMv1 §4.1); htslib fills at most 65,280 (0xFF00) uncompressed bytes per block, and bgzip ≥ 1.16 ends text blocks early at a newline (§3.4);
   - the `BC` extra subfield storing the block size;
   - the 28-byte EOF block `1f 8b 08 04 00 00 00 00 00 ff 06 00 42 43 02 00 1b 00 03 00 ...`;
   - virtual offsets `coffset<<16|uoffset` (SAMv1 §4.1);
@@ -686,7 +699,7 @@ Source: SAMv1 §1.3.2. The spec's own worked example hashes `ACGT ACGT ACGT / ac
 - **M5 calculation** with the spec's worked example. The `.dict` file. GATK requires a `.dict` next to the FASTA [from memory - verify].
 - **Pearson `;` comments and the QUAL format** (Biopython FastaIO and QualityIO docs).
 - **Hard versus soft masking.** Ensembl distributes `dna`, `dna_sm` and `dna_rm` variants [from memory - verify].
-- **Analysis-set design choices:** decoys, EBV and masked PAR copies on chrY [PAR masking from memory - verify].
+- **Analysis-set design choices:** decoys, EBV and masked PAR copies on chrY. The PAR masking is confirmed in all three copies used here: chrY:1,000,001 (inside PAR1) is `N` in the Broad, iGenomes NCBI and iGenomes UCSC files [verified: GRCh38]. Also the IUPAC-to-`N` difference between the UCSC and Broad/NCBI copies (pitfall 5).
 - **hg19 versus GRCh38 chrM:** GRCh38 uses the rCRS (verified via `AC:J01415.2`). hg19's chrM was a different sequence [from memory - verify].
 - **SRA and Nanopore header conventions.**
 
@@ -712,7 +725,7 @@ Source: SAMv1 §1.3.2. The spec's own worked example hashes `ACGT ACGT ACGT / ac
 ### Real reference data
 
 - `https://s3.amazonaws.com/broad-references/hg38/v0/Homo_sapiens_assembly38.fasta.fai`, `.dict`, and HTTP byte ranges of `.fasta`.
-- `https://ngi-igenomes.s3.amazonaws.com/igenomes/Homo_sapiens/UCSC/hg38/Sequence/WholeGenomeFasta/genome.fa(.fai)` and `.../NCBI/GRCh38/...`.
+- `https://ngi-igenomes.s3.amazonaws.com/igenomes/Homo_sapiens/UCSC/hg38/Sequence/WholeGenomeFasta/genome.fa(.fai, .dict)` and `.../NCBI/GRCh38/...`. Both are 195-sequence no-alt, analysis-set style files (25 primary + 42 `_random` + 127 `chrUn_` + `chrEBV`); the NCBI copy's chr1 header is identical to the Broad header. They are not the UCSC `hg38.fa.gz` or NCBI RefSeq downloads themselves.
 
 ### Search results only (snippets, pages not opened)
 
@@ -728,3 +741,60 @@ Source: SAMv1 §1.3.2. The spec's own worked example hashes `ACGT ACGT ACGT / ac
 - `en.wikipedia.org` (FASTQ_format, FASTA_format).
 - `blast.ncbi.nlm.nih.gov` and all mirrors of the NCBI FASTA description.
 - `hgdownload.soe.ucsc.edu` (hg38 README on soft-masking) and `ftp.ncbi.nlm.nih.gov` (`README_analysis_sets.txt`).
+
+## Verification log
+
+Adversarial fact-check, 2026-10-16. Primary sources were re-fetched independently from raw.githubusercontent.com: faidx(5), `faidx.c`, `bgzf.c`, `bgzip.c`, bgzip(1), samtools-faidx(1), samtools-import(1), samtools-fasta(1), htslib `sam.c`, SAMv1.tex (identical to hts-specs master 510c107), CRAMv3.tex, the Cock et al. fastqs README and Biopython's copies of its error files, Biopython `QualityIO.py`/`FastaIO.py`, bwa (`bwa.1`, `bwa.c`, `bwamem_pair.c`, `fastmap.c`), `readfq.py`, FastQC `PhredEncoding.java`, the fastp README and the Galaxy FASTQ FAQ. Every snippet and index row in §3 and §8 was re-run with samtools/htslib 1.24 (pysam 0.24.1) and Biopython 1.88. For bgzip, htslib 1.24 was built from the GitHub release tarball. Real-data claims were re-checked by byte-range fetches of the Broad, iGenomes UCSC and iGenomes NCBI GRCh38 FASTAs, `.fai` and `.dict` files, and by hashing both full chr1 sequences.
+
+### Corrections
+
+| # | Where | Claim | Correction | Source |
+|---|---|---|---|---|
+| 1 | Pitfall 5 | "UCSC and Broad chr1 share `M5:6aef897c...`" | False. GRCh38 chr1 has IUPAC `M` (248,752,514) and `R` (248,755,122). The Broad and NCBI copies keep them; the UCSC copy has `N`. UCSC chr1 uppercased MD5 = `2648ae1bacce4ec4b6cf337dcae37816`, which also matches the iGenomes UCSC `genome.dict`. Soft-masking and re-wrapping alone still leave M5 unchanged. | Full-chr1 MD5 of both files; byte-range fetch of both positions in all three copies; SAMv1 §1.3.2 |
+| 2 | Q9 | Keyed answer: a CRAM made against Broad decodes with UCSC "as long as the names match", because the M5s are identical | Wrong key, because of #1. Rewrote Q9 as Broad versus a soft-masked, re-wrapped copy of the same file, where "yes" is correct. Added a note that a single IUPAC-to-`N` difference makes htslib refuse the slice (`MD5 checksum reference mismatch`). | pysam/htslib 1.24 CRAM round-trip test; CRAMv3 §8.5, §11 |
+| 3 | Q4 | "One record alone could not have proved this" keyed ✔ (its own explanation contradicted it) | Keyed ✘. One record containing a character below 59 (e.g. `5`) proves Phred+33. | Encoding ranges in the Cock README and Biopython `QualityIO` |
+| 4 | Pitfall 10 | "Quality encoding can be detected from one read: It can't." | Overstated. One read can prove +33 when it holds a character below `;`; only reads without such characters are ambiguous. | Same as #3 |
+| 5 | EX-09(b) | The `+` line repeated only the read ID, with `1001` for `1000` | That snippet had two violations: Biopython also rejects a `+` line that omits the comment, even with `1000`. The `+` line now repeats the full title with only `1001` changed. Tested: Biopython rejects it, samtools fqidx accepts it. | Biopython 1.88 test; `QualityIO` docstring ("must be identical") |
+| 6 | EX-01 | Lines of 20/16/24, with "line 3" as the single answer | Two offending lines (line 4 is longer than LINEBASES), so a single-click key is ambiguous. Changed to 20/16/20/4 (still chrM 1-60); samtools still reports `unexpected "A" at line 4`. | samtools 1.24 test; faidx(5) |
+| 7 | §3.4 | ".gzi ... Every block holds 65,280 uncompressed bytes" | True only for `bgzip --binary` or pysam `tabix_compress`. Default `bgzip` 1.24 ends text blocks at newlines and gives (20642, 65225), (41248, 130495), (61931, 195765) for the same file. | bgzip 1.24 built from source; bgzip(1) `--binary`; `bgzip.c` |
+| 8 | GZ-S01 | The EOF block is part of an error-level rule | SAMv1 §4.1.2 says the EOF marker "should" be written. Without it, samtools faidx indexes and retrieves, printing only a warning. Split into GZ-S01 (BC field, error) and GZ-S02 (EOF, warning). | SAMv1 §4.1.2; samtools 1.24 test |
+| 9 | FAI-M01 | "OFFSETs increase in file order" as an error | faidx(5) says rows are only "typically" in file order, and htslib uses an out-of-order `.fai` fine. Split into FAI-M01 (numbers must match the bytes, error) and FAI-M02 (file order, convention). | faidx(5); htslib 1.24 test |
+| 10 | FA-M02 | Excluded characters `\ , " ' ( ) [ ] { } < >` | The backtick is excluded too. Added the spec regex, and escaped the pipes so the table renders. | SAMv1 §1.2.1 |
+| 11 | §3.3, §6 | "There are no tabs in FASTQ" | Too strong. `samtools fastq -T` writes TAB-separated tags in headers. The no-whitespace rule applies to sequence and quality lines (Cock `error_tabs`/`error_spaces`). | samtools 1.24 test; Cock README and test files |
+| 12 | FA-S01 | The first non-blank line must start with `>` (implying leading blank lines are fine) | Biopython 1.88 `fasta` rejects a leading blank line, while samtools skips it. A validator should warn. | Biopython 1.88 and samtools tests |
+| 13 | FA-S05 | Trailing spaces only | Added that a trailing space on the final line is tolerated, and that an internal space indexes cleanly but makes retrieval return shifted sequence containing spaces, silently. | samtools 1.24 test; `faidx.c` (`isgraph` counting) |
+| 14 | §3.3 control field | "This comes from a community forum, not an Illumina specification" | WebSearch snippets attribute the exact wording to Illumina's BaseSpace "FASTQ files" page (plus "always 0 on HiSeq X"). Still unopened, so tagged [snippet only - verify]. | WebSearch snippets |
+| 15 | §3.3 is_filtered | Snippet-only support for `Y` = failed | Confirmed in code: htslib sets `QCFAIL` when the field is `Y`. | htslib `sam.c`; samtools-import(1) |
+| 16 | EX-13 | "an empty record" in the warning bin; "Phred+64 data in 2026" | Ambiguous: an empty *last* record is a samtools error, and FQ-M01 labels +64 misreading an error. Reworded to "empty record in the middle" and "a FASTQ that turns out to be Phred+64 (valid variant; it becomes FQ-M01 if read as +33)". Noted that fqidx rejects zero-length reads. | samtools 1.24 tests |
+| 17 | FQ-C04 | Zero-length reads: only "some downstream tools" fail | samtools fqidx 1.24 fails on them (`Inlined empty line is not allowed`). | samtools 1.24 test |
+| 18 | FA-M01 | Duplicate names supported only by samtools behaviour | Added SAMv1 §1.3: `@SQ` SN values "must be distinct". | SAMv1 §1.3 |
+| 19 | FQ-M03 | Interleaving errors described as caught | bwa `-p` silently treats reads whose neighbour has a different name as single-end, with no abort. | bwa(1) `-p` |
+| 20 | FQ-M04 | "Read IDs are unique within a sample" | R1 and R2 share IDs. Now "within one FASTQ file". | SAMv1 §1.4; bwa pairing |
+| 21 | FA-C01, EX-02, Sources | "UCSC 50 / NCBI 70" as if they were the canonical UCSC and NCBI downloads | They are the iGenomes copies (195-sequence no-alt analysis-set style). Numbers re-verified; labels clarified. | iGenomes `.fai`, headers |
+| 22 | §10 | "127 unplaced `chrUn_`" | Correct count, but the decoys also start with `chrUn_`; clarified. Counts 3,366 / 3,217,346,917 / 25 / 42 / 127 / 261 / 1 / 2,385 / 525 re-verified. | Broad `.fai` |
+| 23 | §10 capstone twist | "an affected relative's earlier gene-panel test" | An affected relative contradicts the de novo narrative. Removed "affected" and added a note. | Clinical-plausibility check against the case design |
+| 24 | §10 SCN1A | Location tagged [from memory] | Cross-referenced to case.md's GENCODE v43 coordinates (chr2:165,984,641-166,149,214, minus strand). Not re-checked independently (see below). Added the minus-strand `faidx -i` point. | case.md |
+| 25 | §11 PAR masking | [from memory - verify] | Verified: chrY:1,000,001 is `N` in all three copies. | Byte-range fetches |
+| 26 | EX-04 | "the fixed file indexes to `chrM_demo 60 38 20 21`" | True only if the duplicate is deleted; renaming adds `chrM_demo2 10 128 10 11`. | samtools 1.24 test |
+| 27 | FA-M06 | SAMv1 §4.2.3 cited for reference alphabets | That section is about BAM *read* SEQ encoding; clarified. Added that real GRCh38 contains M/R, so a validator must not flag IUPAC codes. | SAMv1 §4.2.3; GRCh38 bytes |
+| 28 | Pitfall 9; EX-12(c); §11 BGZF | "quality lines often start with `@`"; "every pair is mismatched"; "64 KiB blocks" | Softened to "can" (binned modern data may never contain `@`); "every pair after the removed read"; "at most 64 KiB, 65,280 uncompressed bytes per htslib block". | SAMv1 §4.1; reasoning |
+
+### Re-verified and found correct (no change)
+
+- All `.fai` rows and byte arithmetic: toy.fa (38/147), base 45 = byte 84 `A`, EX-02 bytes 10206/10254/10212, Q2 = 251446312 and its distractors, EX-03 rows, EX-10 fqidx rows (`30 4 18 19 38`, `18 74 18 19 95`), and faidx(5)'s CR-LF example.
+- chrM first 60 bp, R1 = chrM:1-36, R2 = reverse complement of chrM:115-150; Broad chr1/chrM headers (two-space separators, `AC:J01415.2`, `tp:circular`); chr1 starting with 10,000 `N`; the UCSC lowercase telomere.
+- Phred maths: R1 ΣP = 0.0894 (Q25 at base 16, Q11 at base 32); `IIII#` = 0.6314; `)))))` ≈ 0.79; the character-to-Q mappings in §2, §3.3, EX-08, EX-10 and Q4.
+- samtools behaviour: duplicate warning and first-wins retrieval, an empty middle record dropped silently and an empty last record giving `File truncated`, a stale `.fai` returning `first 60 b` with no warning (even when the FASTA is newer), an empty NAME column, leading-space names, mixed EOL and blank-line errors, gzip refusal, `-i` `/rc`, and 1-based closed regions.
+- FASTQ behaviour: Biopython and fqidx messages in EX-09(a)/(c), EX-05 item 7 rejected by both Biopython and samtools (faidx and fqidx), `+` title mismatch accepted by fqidx, FQ-S07 (fqidx fails, Biopython accepts), and the readfq behaviours.
+- bwa: pairing by position, the `trim_readno` single-digit `/N` stripping, and the `paired reads have different names` abort; `-C` comment rule.
+- SAMv1: QNAME regex `[!-?A-~]{1,254}`, the M5 worked example (`dfabdbb36e239a6da88957841f32b8e4` recomputed), the BGZF magic bytes and EOF block, and Appendix A region parsing.
+- FastQC encoding logic, fastp options (`-6`, `--interleaved_in`, `-l` default 15), and the Galaxy Nanopore header.
+
+### Could not verify (blocked or no primary source)
+
+- Illumina documentation (support.illumina.com, help.basespace.illumina.com, help.connected.illumina.com: DNS failure): header field meanings, the UMI 8th field, the sample-number-versus-index wording, binned quality values per instrument, the `_S1_L001_R1_001` naming, and bcl2fastq's default exclusion of non-PF reads.
+- Cock et al. 2010 full text and the Illumina 1.5 `B` indicator (only search snippets), and PacBio's Q93 cap (only a Bioconductor thread).
+- en.wikipedia.org, open-bio.org, rest.uniprot.org, rest.ensembl.org and api.genome.ucsc.edu (all blocked): the pre-1.8 and SRA header examples, the full UniProt P69905 header, SCN1A coordinates (taken from case.md, not independently re-checked), and the hg19 chrM history.
+- Whether UCSC's own `hg38.fa.gz` from hgdownload (as opposed to the iGenomes copy) also has `N` at the two chr1 IUPAC positions. This is expected from 2bit's ACGTN-only alphabet [from memory - verify].
+- That GATK requires a `.dict`, and the Ensembl `dna`/`dna_sm`/`dna_rm` naming (unchanged, still tagged).
+- Cross-note consistency: `case.md` uses NovaSeq X style headers (`@LH00417:...`, 2×150), while this note's examples use NovaSeq 6000 style `A00123` headers and the NovaSeq 6000 quality alphabet. Harmonise them before writing lesson content.

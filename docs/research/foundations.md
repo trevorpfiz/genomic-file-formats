@@ -44,9 +44,9 @@ Most validity problems a learner will meet are syntax errors, "where" errors (wr
 
 **The design problem.** One haploid human genome is about 3.1 Gb. A 30x genome needs roughly 90 Gb of sequenced bases, plus one quality character per base (search-result summary of a 2011 review; see Sources). The formats share three engineering answers:
 
-- **Don't repeat the reference.** Store reads as placements plus differences (SAM/BAM), store only the sites that differ (VCF), or compress against the reference itself (CRAM).
+- **Don't repeat the reference.** Record each read's placement on the reference (position + CIGAR) instead of rebuilding a genome (SAM/BAM still store every read base in SEQ), store only the sites that differ (VCF), or compress read bases as differences against the reference itself (CRAM, CRAMv3 §1).
 - **Compress in independent blocks** (BGZF, at most 64 KiB each) so that an index can jump straight to a region without decompressing everything before it.
-- **Agree on a coordinate system** to point into the reference. Two conventions survive for historical reasons, and converting between them is the most common bug in bioinformatics.
+- **Agree on a coordinate system** to point into the reference. Two conventions survive for historical reasons, and converting between them is one of the most common sources of bugs in bioinformatics.
 
 **Analogies that work for bioinformatics students**
 
@@ -72,7 +72,7 @@ Most validity problems a learner will meet are syntax errors, "where" errors (wr
 | K | G/T | M | | N | any | N |
 | M | A/C | K | | | | |
 
-  Where codes are allowed: SAM SEQ accepts `=ACMGRSVTWYHKDBN` (BAM packs these into 4 bits: SAMv1 §4.2.3). VCF REF accepts only A, C, G, T and N. An ambiguous reference base must be reduced to the alphabetically first base it stands for, so R becomes A (VCF 4.5 §1.6.1 item 4, introduced in 4.3). GFA segment sequences match `[A-Za-z=.]+`.
+  Where codes are allowed: SAM SEQ matches `\*|[A-Za-z=.]+` (SAMv1 §1.4), but BAM can only store the 16 case-insensitive codes `=ACMGRSVTWYHKDBN` in 4 bits; every other character becomes `N` (SAMv1 §4.2.3). VCF REF accepts only A, C, G, T and N. An ambiguous reference base must be reduced to the alphabetically first base it stands for, so R becomes A (VCF 4.5 §1.6.1 item 4, introduced in 4.3). GFA segment sequences match `[A-Za-z=.]+`.
 - **Soft-masking vs hard-masking.** Lowercase bases in a reference mark repeats found by tools such as RepeatMasker. They are still real bases: `acgt` means the same as `ACGT`. Hard-masking replaces bases with `N`. Examples: the T2T-CHM13v2.0 analysis FASTA is soft-masked, and its recommended short-read version hard-masks the chrY PARs to N (CHM13 README). UCSC `.2bit` files store "masked (lower-case) blocks" separately (UCSC FAQformat). The SAM spec says "no assumptions can be made on the letter cases" of SEQ (§1.4). VCF REF/ALT are case-insensitive (§1.6.1). The reference MD5 is computed after uppercasing (SAMv1 §1.3.2).
 
 ### 3.2 Reference genomes
@@ -83,13 +83,13 @@ Most validity problems a learner will meet are syntax errors, "where" errors (wr
 | Patch release | Adds fix/novel patch scaffolds (e.g. GRCh38.p14) without changing chromosome coordinates [from memory - verify] |
 | Primary assembly | Chromosomes + unlocalized contigs (chromosome known, position unknown) + unplaced contigs (chromosome unknown) (bwa README-alt) |
 | ALT contigs | Alternate haplotypes of variable regions. In GRCh38 they total 109 Mb and cover 60 Mbp of the primary assembly. Mapping to them without an ALT-aware aligner gives many reads mapping quality 0 (bwa README-alt). |
-| Decoys | Extra sequences, including EBV, added so that reads from contamination or missing sequence do not pile up in the wrong place (bwakit `hs38DH`, `hs37d5`) |
+| Decoys | Extra sequences added so that reads from contamination or missing sequence do not pile up in the wrong place. bwakit lists the EBV genome separately from the decoys (`hs38` = primary + EBV; `hs38DH` adds ALT, decoys and HLA; `hs37` = GRCh37 primary + EBV; `hs37d5` adds decoys), but EBV plays the same "sink" role (bwakit `run-gen-ref`) |
 | Analysis set | A build prepared for read mapping: e.g. chrY PARs hard-masked, ALT contigs removed or kept, EBV and decoys added (bwakit `run-gen-ref`, CHM13 README, search summary of UCSC/NCBI analysis sets) |
 
 | Build | UCSC name | Chromosome names | Mitochondrion | chr1 length |
 |---|---|---|---|---|
-| GRCh37 (GRC/Ensembl, "b37") | hg19 | GRC/Ensembl: `1`..`22`, `X`, `Y`, `MT`; UCSC: `chr1`.. | GRCh37 `MT` = rCRS NC_012920.1, 16,569 bp; **hg19 `chrM` = NC_001807, 16,571 bp, a different sequence** (search summary of Bioconductor list) | 249,250,621 [from memory - verify] |
-| GRCh38 | hg38 | `chr1`.. (UCSC/GENCODE [from memory - verify]) or `1`.. (Ensembl dumps, see the Ensembl GTF sample) | `chrM`/`MT` = rCRS, 16,569 bp (the SAMv1 `@SQ AN` example: `SN:MT AN:chrMT,M,chrM LN:16569`) | 248,956,422 [from memory - verify] |
+| GRCh37 (GRC/Ensembl, "b37") | hg19 | GRC/Ensembl: `1`..`22`, `X`, `Y`, `MT`; UCSC: `chr1`.. | GRCh37 `MT` = rCRS NC_012920.1, 16,569 bp; **hg19 `chrM` = NC_001807, 16,571 bp, a different sequence** (16,571 confirmed in bedtools `genomes/human.hg19.genome`; accession from search summary of Bioconductor list) | 249,250,621 (bedtools `genomes/human.hg19.genome`; hg19 and GRCh37 nuclear chromosomes are the same sequences) |
+| GRCh38 | hg38 | `chr1`.. (UCSC/GENCODE [from memory - verify]) or `1`.. (Ensembl dumps, see the Ensembl GTF sample) | `chrM`/`MT` = rCRS, 16,569 bp (the SAMv1 `@SQ AN` example: `SN:MT AN:chrMT,M,chrM LN:16569`; bedtools `human.hg38.genome` chrM 16569) | 248,956,422 (bedtools `genomes/human.hg38.genome`) |
 | T2T-CHM13v2.0 | hs1 (CHM13 README) | `chr1`..`chrY` | analysis set offers rCRS replacement | different again |
 
 - T2T-CHM13 is a gapless 3.055 Gb assembly adding nearly 200 Mb of sequence, including centromeric satellites, segmental duplications and the short arms of the acrocentric chromosomes (Nurk et al. 2022, *Science*, abstract via search). v2.0 adds a finished Y chromosome from HG002 (CHM13 README).
@@ -99,7 +99,7 @@ Most validity problems a learner will meet are syntax errors, "where" errors (wr
 ### 3.3 Sequencing
 
 - **Library and reads.** DNA is fragmented and adapters are attached. A short-read instrument reads one or both ends of each fragment. In **paired-end** data, R1 and R2 come from opposite ends of one fragment and point toward each other. **Fragment (insert) size** is the span of the whole fragment. SAM TLEN records it as `end - start + 1` across both mates' mapped bases (SAMv1 §1.4). The unsequenced middle is the inner distance.
-- **Short vs long reads.** Short reads (Illumina, typically 2x150 bp [from memory - verify]) are cheap and accurate per base but cannot span long repeats. Long reads (PacBio HiFi, around 15-20 kb at about Q30 or better, and Oxford Nanopore, from tens of kb to above 100 kb [from memory - verify]) span repeats and structural-variant breakpoints. minimap2 describes its target as queries "from a few kilobases to ~100 megabases in length at an error rate ~15%" (minimap2(1)).
+- **Short vs long reads.** Short reads (Illumina, typically 2x150 bp [from memory - verify]) are cheap and accurate per base but cannot span long repeats. Long reads (PacBio HiFi, around 15-20 kb, defined as at least Q20 (99%) and often around Q30 median, and Oxford Nanopore, from tens of kb to above 100 kb [from memory - verify]) span repeats and structural-variant breakpoints. minimap2 describes its target as queries "from a few kilobases to ~100 megabases in length at an error rate ~15%" (minimap2(1)).
 - **Error profiles.** Short reads mostly have substitution errors, and quality falls toward the 3' end [from memory - verify]. Raw PacBio CLR reads have about 13-15% error, and HiFi reads are accurate because each molecule is read many times. Nanopore errors are enriched in homopolymer indels (search summary of benchmarking studies). The error model decides which variant classes each technology can call well.
 - **Depth vs breadth.** Mean depth C = N x L / G (reads x read length / target size). Breadth is the fraction of the target covered at or above some depth. Exome capture targets about 30-45 Mb, roughly 1-2% of the genome (search summary of kit sizes). The targets ship as a BED file, which is the list of regions that were actually examined. Exomes are usually sequenced deeper than genomes (often around 100x vs around 30x [from memory - verify]) but more unevenly: GC-rich and poorly captured exons dip.
 - **Multiplexing.** Several samples share a run. Read groups (`@RG ID`/`SM`) keep the child's reads separate from the parents' reads all the way into the VCF columns.
@@ -118,7 +118,7 @@ Phred: **Q = -10 log10(P_error)** and **P_error = 10^(-Q/10)**, rounded to an in
 
 - **ASCII offset 33 ("Sanger", Illumina 1.8+).** Character = chr(Q + 33). `!` is Q0 and `~` is Q93. SAM QUAL must match `[!-~]+` and is "the same as the quality string in the Sanger FASTQ format" (SAMv1 §1.4). BAM stores the raw 0-93 values with no offset (§4.2.3).
 - **Legacy offset 64.** Illumina 1.3-1.7 used Phred+64 (Q0-62). Early Solexa used odds-based scores Q = -10 log10(P/(1-P)) with offset 64, which can be negative (-5 to 62). Since CASAVA 1.8, Illumina writes standard Phred+33 (Biopython `QualityIO`, after Cock et al. 2010).
-- **Binned qualities.** Modern instruments emit only a few distinct Q values to save space: NovaSeq 6000 (RTA3) emits 2, 12, 23 and 37 (`#`, `-`, `8`, `F`), and NovaSeq X emits 12, 24 and 40 with control software 1.2+ (Illumina documentation via search summary). CRAM can store qualities lossily by design (CRAMv3 §1).
+- **Binned qualities.** Modern instruments emit only a few distinct Q values to save space. NovaSeq 6000 (RTA3) originally emitted 2, 12, 23 and 37 (`#`, `-`, `8`, `F`), but since control software NVCS v1.1 (2019) it emits 2, 11, 25 and 37 (`#`, `,`, `:`, `F`), which is what most NovaSeq 6000 FASTQ files contain (dada2 GitHub issue #791, quoting Illumina support). NovaSeq X uses three bins labelled 12, 24 and 40 with control software 1.2+ (12, 20, 37 before that), and release 1.4.0 reportedly raised the top bin to Q41 (Illumina knowledge article 000008320 and release notes, via search summary only [verify]). A validator should infer "binned" from the number of distinct characters, never from a fixed list. CRAM can store qualities lossily by design (CRAMv3 §1).
 - **The same scale everywhere.** MAPQ = -10 log10 P(mapping position is wrong), where 255 means unavailable (SAMv1 §1.4). VCF QUAL is the Phred probability that the ALT assertion is wrong, GQ is the genotype quality, and PL holds Phred-scaled genotype likelihoods (VCF 4.5 §1.6.1, §1.6.2).
 - **Arithmetic rule.** Convert to probabilities before summing or averaging. The expected number of errors in a read is the sum of its P values.
 
@@ -132,7 +132,7 @@ Phred: **Q = -10 log10(P_error)** and **P_error = 10^(-Q/10)**, rounded to an in
 |---|---|---|
 | SNV | `C` -> `G` | one base |
 | MNV | `CT` -> `GA` | adjacent substitutions |
-| Indel | `TC` -> `T` (del), `C` -> `CA` (ins) | VCF pads with the preceding base (VCF 4.5 §5.1) |
+| Indel | `TC` -> `T` (del), `C` -> `CA` (ins) | VCF pads with the preceding base (rule: VCF 4.5 §1.6.1(4); these examples: §5.1) |
 | SV | `<DEL>`, `<INV>`, breakends | ≥50 bp by common convention [from memory - verify] |
 | CNV | `<DUP>`, `<CNV>` | changes copy number (dosage) |
 
@@ -144,7 +144,7 @@ Phred: **Q = -10 log10(P_error)** and **P_error = 10^(-Q/10)**, rounded to an in
 
 - **Alignment** answers "where did this read come from, and how does it differ there?". The differences are matches, mismatches, insertions, deletions and clipped ends, which a CIGAR string such as `8M2I4M1D3M` encodes. **MAPQ** expresses confidence in the placement. A read with two equally good placements has P(wrong) = 0.5, so MAPQ ≈ 3. The SAM spec notes that non-best multiple mappings get "mapping quality <Q3" (§1.2 footnote). **Chimeric/split alignments** (one read, two places) are the raw evidence for structural variants (SAMv1 §1.2).
 - **PAF** records the same idea at a coarser grain: approximate matching intervals between long sequences, with optional CIGAR.
-- **Sequence graph.** A linear reference is one path. A pangenome graph stores **segments** (nodes holding sequence) and **links** (edges between oriented segment ends). Each haplotype is a **walk** through the graph, and a variant appears as a **bubble**. GFA has S, L, P and W lines. rGFA adds `SN`/`SO`/`SR` tags so that each base keeps a stable linear-reference coordinate (rGFA.md).
+- **Sequence graph.** A linear reference is one path. A pangenome graph stores **segments** (nodes holding sequence) and **links** (edges between oriented segment ends). Each haplotype is a **walk** through the graph, and a variant appears as a **bubble**. GFA's core lines are S, L, P and W (plus H, C and J). rGFA adds `SN`/`SO`/`SR` tags so that each base keeps a stable coordinate: a stable-sequence name plus an offset. Rank `SR:i:0` segments come from the linear reference (e.g. GRCh38); rank > 0 segments are placed on other stable sequences (rGFA.md).
 
 ### 3.7 Anatomy of a typical genomic text file
 
@@ -172,7 +172,7 @@ AGCATGTTAGATAAGATAGCTGTGCTAGTAGGCAGTCAGCGCCAT
                 bases 7-14 = TTAGATAA              base 42 = C
 ```
 
-The interval "bases 7-14" (8 bp) and the SNV "base 42 C>G" in each format. Only record lines are shown: each format's required header (`##gff-version 3`, `##fileformat=VCFv4.5` and the `#CHROM` line, the WIG track line) is omitted, so this is a side-by-side comparison, not one file. In the record lines below, the gaps between columns are single tab characters.
+The interval "bases 7-14" (8 bp) and the SNV "base 42 C>G" in each format. Only record lines are shown: each format's required header (`##gff-version 3`, `##fileformat=VCFv4.5` and the `#CHROM` line) is omitted, so this is a side-by-side comparison, not one file. (A WIG `track type=wiggle_0` line is required only when the file is uploaded as a UCSC custom track; for conversion to bigWig it "must not be present", per the UCSC wiggle doc, so a validator must not require it.) In the record lines below, the gaps between columns are single tab characters.
 
 ```
 # BED (0-based half-open): start = 7-1 = 6, end = 14
@@ -219,7 +219,7 @@ The SAMv1 §1.2 definitions: "The SAM, VCF, GFF and Wiggle formats are using the
 | Format / field | Convention on disk | Notes and source |
 |---|---|---|
 | FASTA | none (position = order in string) | `.fai` and region queries supply coordinates |
-| `.fai` | OFFSET is a 0-based **byte** offset. LENGTH is a base count. | faidx(5); `samtools faidx ref.fa chr:from-to` takes 1-based inclusive regions (samtools-faidx(1), CRAMv3 §11 example) |
+| `.fai` | OFFSET is a 0-based **byte** offset. LENGTH is a base count. | faidx(5); `samtools faidx ref.fa chr:from-to` takes 1-based inclusive regions (stated in the CRAMv3 §11 example: "the bases are counted 1-based"; samtools-faidx(1) 1.24 only gives the `chr:from-to` syntax) |
 | FASTQ | none | qualities Phred+33 |
 | BED cols 2-3 (+ thickStart/End, blockStarts relative to chromStart) | 0-based half-open | BEDv1 §1.3, §1.5, §1.9. UCSC: chromStart=0, chromEnd=100 is the first 100 bases, shown in the browser as `chr1:1-100`. |
 | BEDPE start1/end1, start2/end2 | 0-based half-open; `-1` = unknown | bedtools docs ("zero-based start", "one-based end", which is the same thing) |
@@ -275,14 +275,14 @@ Severity labels: **error** (data are wrong or unusable), **warning** (suspicious
 | ID | Rule | Source | Minimal violation | Severity |
 |---|---|---|---|---|
 | XF-01 | BED `0 ≤ chromStart ≤ chromEnd ≤ contig length` | BEDv1 §1.6 | `chr1	500	400` | error |
-| XF-02 | GFF3/GTF start and end are positive 1-based integers with start ≤ end (except circular features) | GFF3 1.26 cols 4-5 | `chr1	x	exon	0	99	...` (start 0) | error |
+| XF-02 | GFF3/GTF start and end are positive 1-based integers with start ≤ end, always. A feature crossing the origin of a circular landmark keeps start ≤ end by setting end = true end + landmark length, so the circular exception is to "end ≤ landmark length", not to start ≤ end | GFF3 1.26 cols 4-5; GTF2.2 `<start>`/`<end>` (as quoted in the AGAT docs) | `chr1	x	exon	0	99	...` (start 0) | error |
 | XF-03 | VCF POS is 1-based. The only out-of-range values allowed are 0 and N+1 (telomeres). | VCF 4.5 §1.6.1(2) | `chrM	16571	...` on rCRS (N=16,569) | error |
 | XF-04 | SAM POS is in `[0, 2^31-1]`, and 0 means unplaced | SAMv1 §1.4 | `POS = -1` in SAM text (that is BAM's encoding) | error |
-| XF-05 | Quality characters lie in `!`..`~` (Q0-93), and SAM QUAL length should equal SEQ length | SAMv1 §1.4 (QUAL regex) | QUAL containing a space, or one character short | error |
+| XF-05 | Quality characters lie in `!`..`~` (Q0-93), and SAM QUAL length equals SEQ length | SAMv1 §1.4 (QUAL regex is a MUST; the length rule is worded "ought to equal", but htslib rejects the record with "SEQ and QUAL are of different length", htslib `sam.c`) | QUAL containing a space, or one character short | error |
 | XF-06 | Contig names follow the SAM/VCF name rule: printable ASCII except `\ , " ' ( ) [ ] { } < >` and the backtick, and no leading `*` or `=` | SAMv1 §1.2.1; VCF 4.5 §1.4.7 (since 4.3) | `@SQ	SN:*chr1	LN:1000` (leading `*`) | error |
 | XF-07 | BED `chrom` matches `[A-Za-z0-9_]{1,255}`, which is stricter than SAM | BEDv1 §1.6 (1) | `HLA-A*01:01:01:01	0	100` | error (strict BED) / warning (most tools accept it) |
 | XF-08 | VCF REF uses only A, C, G, T, N (any case). IUPAC reference bases are reduced to the alphabetically first base. | VCF 4.5 §1.6.1(4) (since 4.3) | `REF=R` | error |
-| XF-09 | Random access requires BGZF (not plain gzip) and coordinate-sorted data | SAMv1 §4.1, §5; tabix(1); CRAMv3 §12 | `gzip calls.vcf; tabix calls.vcf.gz` fails | error |
+| XF-09 | Random access requires coordinate-sorted data and, for BAM, BCF and compressed text (VCF/BED/GFF), BGZF rather than plain gzip. CRAM is not BGZF and gets random access from its own containers and slices plus `.crai` | SAMv1 §4.1, §5; tabix(1); CRAMv3 §12 | `gzip calls.vcf; tabix calls.vcf.gz` fails | error |
 | XF-10 | CRAM needs the exact reference: `@SQ M5` is required unless the reference is embedded, and readers must check MD5s | CRAMv3 §8 ("CRAM header block(s)"), §11 | decoding with a different FASTA | error |
 
 ### (b) Semantic and consistency rules
@@ -295,7 +295,7 @@ Severity labels: **error** (data are wrong or unusable), **warning** (suspicious
 | XF-14 | **Off-by-one conversions.** 1-based -> BED: start - 1, end unchanged. BED -> 1-based: start + 1. | SAMv1 §1.2; BEDv1 §1.3 | SNV at VCF POS 42 written as BED `ref	42	42` (an empty interval) or `ref	42	43` (the wrong base) | error |
 | XF-15 | **Length formula matches the convention**: `end - start` for 0-based half-open, `end - start + 1` for 1-based closed | same | reporting a GFF3 exon `1001-1200` as 199 bp | error |
 | XF-16 | Coordinates lie within the declared contig length (`@SQ LN`, `##contig length`, `##sequence-region`, `.fai`) | BEDv1 §1.6; GFF3 `##sequence-region`; VCF 4.5 §1.6.1 | a GRCh37 chr1 position above 248,956,422 used on GRCh38 | error |
-| XF-17 | VCF REF equals the reference base(s) at POS (case-insensitive) | VCF 4.5 §1.6.1(4); `bcftools norm --check-ref` [from memory - verify] | `ref	42	.	T	G` when ref:42 is C | error |
+| XF-17 | VCF REF equals the reference base(s) at POS (case-insensitive) | VCF 4.5 §1.6.1(4); `bcftools norm --check-ref` (modes e, w, x, s; bcftools.txt, develop) | `ref	42	.	T	G` when ref:42 is C | error |
 | XF-18 | Strand handling: SAM reverse-strand SEQ is already reverse-complemented; PAF target coordinates are forward-strand even when col 5 is `-`; GFF3 phase counts from the 5' end (`end` on `-`) | SAMv1 §1.4; PAF.md; GFF3 col 8 | reverse-complementing a FLAG 16 SEQ a second time | error |
 | XF-19 | One quality encoding: Phred+33 throughout. Legacy +64 must be converted before alignment. | SAMv1 §1.4 QUAL; Biopython/Cock 2010 | Phred+64 FASTQ read as +33, so a Q40 `h` becomes "Q71" | error |
 | XF-20 | Region strings typed into samtools/tabix are 1-based inclusive, even when the data file is BED | samtools-view(1), tabix(1) | querying `chr2:1000-1002` intending BED `[1000,1002)` | error (logic) |
@@ -309,27 +309,27 @@ Severity labels: **error** (data are wrong or unusable), **warning** (suspicious
 |---|---|---|---|---|
 | XF-24 | Contig order in every file follows the reference `.fai`/`.dict` order | GATK/Picard behaviour [from memory - verify]; BEDv1 §3.4 allows any order | lexicographically sorted VCF fed to a dictionary-ordered tool | convention (often fatal in practice) |
 | XF-25 | Single tab as the only separator | BEDv1 §3.5 (recommended); tabix needs tabs | BED with spaces | convention |
-| XF-26 | No `track`/`browser` lines in a `.bed` file ("valid BED files must not have any browser or track lines") | BEDv1 §5 | `track name=targets` at the top of `targets.bed` | convention (strict BEDv1: error; UCSC custom tracks and most tools tolerate it) |
-| XF-27 | Companion-file naming: `x.bam`+`x.bam.bai` (or `x.bai`), `x.cram.crai`, `x.vcf.gz.tbi`/`.csi`, `ref.fa.fai`, `ref.fa.gz.gzi` | faidx(5); bgzip(1); tool behaviour | index named `x.vcf.tbi` next to `x.vcf.gz` | convention |
+| XF-26 | No `track`/`browser` lines in a `.bed` file ("valid BED files must not have any browser or track lines"). **Note: this row is the reverse of the section heading.** BEDv1 states it as a MUST; it is the tools (UCSC custom tracks, bedtools) that tolerate it. | BEDv1 §5 (normative "must not"; such files "should use the file extension `.track`") | `track name=targets` at the top of `targets.bed` | error (strict BEDv1) / warning (permissive mode) |
+| XF-27 | Companion-file naming: `x.bam`+`x.bam.bai` (or `x.bai`), `x.cram.crai` (or `x.crai`), `x.vcf.gz.tbi`/`.csi`, `ref.fa.fai`, `ref.fa.gz.gzi`. htslib looks for `<file>.csi` and then the name with its last extension replaced (`x.csi`), and then the same for `.bai`/`.tbi`/`.crai`. So `x.vcf.tbi` next to `x.vcf.gz` **is** found by htslib (other tool families may not find it [from memory - verify]) | faidx(5); bgzip(1); htslib `hts.c` `hts_idx_check_local()` | index named `child.sorted.bam.bai` next to `child.bam` (left over after a rename, so no tool finds it) | convention |
 | XF-28 | Map short reads to an analysis set (PARs masked, ALT-aware handling, decoys) and record which one in the header (`@SQ AS/UR/M5`, `##reference`) | bwa README-alt; CHM13 README | GRCh38 with ALTs and a non-ALT-aware aligner, giving MAPQ 0 across the ALT regions | warning |
 
 ## 6. Recognition cues
 
 | Question | Cue |
 |---|---|
-| 0-based or 1-based? | A start of `0` anywhere means 0-based. Rows with `start = end` are empty intervals in BED but one-base features in GFF/VCF. A single-base feature written as `p-1	p` is BED-style. |
-| Which build? | chr1 length 248,956,422 means GRCh38; 249,250,621 means GRCh37 [from memory - verify]. Mito length 16,571 means hg19 `chrM`; 16,569 means rCRS. Check `@SQ AS/M5` and `##reference`/`##contig`. |
+| 0-based or 1-based? | A start of `0` in an interval start column (BED-like files, PAF, GFA W) means 0-based. **Exceptions:** SAM POS `0` means "no position" and VCF POS `0` is a telomere, so a `0` there does not make the file 0-based. Rows with `start = end` are empty intervals in BED but one-base features in GFF (VCF has no end column). A single-base feature written as `p-1	p` is BED-style. |
+| Which build? | chr1 length 248,956,422 means GRCh38; 249,250,621 means GRCh37/hg19 (bedtools `human.hg38.genome` / `human.hg19.genome`). Mito length 16,571 means hg19 `chrM`; 16,569 means rCRS. Check `@SQ AS/M5` and `##reference`/`##contig`. |
 | Which naming? | `chr1`/`chrM` is UCSC style; `1`/`MT` is GRC/Ensembl style. Look for `_alt`, `_random`, `chrUn_`, `_decoy`, `chrEBV`, `HLA-` contigs. |
-| gzip vs BGZF | Both start `1f 8b 08`. BGZF has FLG=`04` and bytes 12-13 = `42 43` ("BC"), and ends with the 28-byte EOF block. |
-| Binary magic | After BGZF decompression: BAM `BAM\1`, BCF `BCF` + bytes 2,2, TBI `TBI\1`, CSI `CSI\1` (CSI is BGZF-compressed in htslib practice [from memory - verify]). Uncompressed: BAI starts `BAI\1`; CRAM starts `CRAM` (43 52 41 4d) then major 3, minor 0 or 1. 2bit signature `0x1A412743`. |
-| First-line signatures | FASTA `>`; FASTQ `@` with a `+` line every 4 lines; SAM `@HD`/`@SQ`; VCF `##fileformat=VCFv4.x`; GFF3 `##gff-version 3`; WIG `track type=wiggle_0` then `variableStep`/`fixedStep`; GFA `H	VN:Z:1.x` or `S` lines; PAF has 12+ columns with `+`/`-` in col 5. |
+| gzip vs BGZF | Both start `1f 8b 08`. BGZF has FLG=`04` and, at 0-based bytes 12-13, `42 43` ("BC", when BC is the first extra subfield, as bgzip writes it), and ends with the 28-byte EOF block. |
+| Binary magic | After BGZF decompression: BAM `BAM\1`, BCF `BCF` + bytes 2,2, TBI `TBI\1`, CSI `CSI\1` (htslib writes CSI and TBI through BGZF and BAI uncompressed: `bgzf_open(fnidx, fmt == HTS_FMT_BAI ? "wu" : "w")` in htslib `hts.c`). Uncompressed: BAI starts `BAI\1`; CRAM starts `CRAM` (43 52 41 4d) then major 3, minor 0 or 1. 2bit signature `0x1A412743`. |
+| First-line signatures | FASTA `>`; FASTQ `@` with a `+` line every 4 lines (for unwrapped FASTQ only; multi-line FASTQ exists and faidx(5) indexes it); SAM `@HD`/`@SQ` (the header is optional); VCF `##fileformat=VCFv4.x`; GFF3 `##gff-version 3`; WIG `track type=wiggle_0` (custom-track files only) then `variableStep`/`fixedStep`; GFA `H	VN:Z:1.x` or `S` lines; PAF has 12+ columns with `+`/`-` in col 5. |
 | Quality offset | Any character below `;` (ASCII 59) proves Phred+33. Mostly `@`-`h` with nothing below `@` suggests +64. Only 3-4 distinct characters means binned. |
 
 ## 7. Common misconceptions and real-world pitfalls
 
 1. **"BED is 0-based, so BED end is also 0-based."** The end is exclusive. bedtools describes it as a "one-based end", which is the same thing. Only the start changes on conversion.
 2. **"GFF and BED differ by one everywhere."** Only starts differ. Ends are identical.
-3. **"A zero-length BED interval is a typo."** It is legal and means an insertion point (BEDv1 §1.6). Naively converting SNVs to BED as `POS	POS` creates zero-length intervals that overlap nothing.
+3. **"A zero-length BED interval is a typo."** It is legal and means an insertion point (BEDv1 §1.6). Naively converting SNVs to BED as `POS	POS` creates zero-length intervals that describe the gap *after* the SNV base, not the base. What happens next depends on the tool: strict half-open arithmetic says they overlap nothing, while bedtools widens every zero-length interval to `[start-1, end+1)` before intersecting (`Record::adjustZeroLength()` in bedtools2), so it reports hits on *both* flanking bases. Either way the answer is wrong.
 4. **"VCF deletions start where the deletion starts."** POS points to the padding base *before* the deleted bases. For `POS=14 REF=AG ALT=A`, the deleted base is 1-based 15, which is BED `14	15`. Here the two off-by-ones cancel.
 5. **"chr1 and 1 are the same, so just strip `chr`."** That works for GRCh37 nuclear chromosomes, but hg19 `chrM` is a different sequence from `MT`. Contig sets also differ (`_random` vs accession names).
 6. **"GRCh37 and GRCh38 coordinates are close enough."** Positions shift by thousands to millions of bases, and some sequence was added, removed or moved between contigs. Use liftover with a chain file, never arithmetic.
@@ -338,7 +338,7 @@ Severity labels: **error** (data are wrong or unusable), **warning** (suspicious
 9. **"MAPQ 0 means the read is unaligned."** It means the placement is ambiguous (repeats, ALT contigs). The unmapped flag is 0x4.
 10. **"Indexing a .gz works."** Only if it was BGZF-compressed (`bgzip`), not `gzip`.
 11. **"Exome coverage dip = deletion."** Capture efficiency and GC content also cause dips. Compare with the parents and controls before concluding anything.
-12. **"De novo = not seen in the parents' VCF rows."** A parent may simply have zero coverage there. A gVCF reference block or the per-sample DP/GQ is needed to *prove* the parent is hom-ref.
+12. **"De novo = not seen in the parents' VCF rows."** A parent may simply have zero coverage there. A gVCF reference block or the per-sample DP/GQ is needed to *show* the parent is hom-ref, and only when that DP/GQ is adequate: a reference block with DP 3 and GQ 8 shows almost nothing.
 13. **"Reverse complement = complement."** You must also reverse the string. IUPAC codes complement too (R<->Y, K<->M, B<->V, D<->H).
 
 ## 8. Exercise bank
@@ -370,7 +370,7 @@ ref	41	42	C>G
 ref	8	9	A>T
 ref	29	30	A>G
 ```
-Explanation: a single base at 1-based p is `[p-1, p)`. The original lines were legal BED, but they described insertion points and would intersect nothing.
+Explanation: a single base at 1-based p is `[p-1, p)`. The original lines were legal BED, but they described insertion points (the gap after each SNV base). By strict half-open arithmetic they intersect nothing; bedtools instead widens zero-length intervals to the two flanking bases, so `ref	42	42` would also hit features covering base 43. Neither result is the SNV.
 
 **EX-04 · sort · which convention is on disk?**
 Drag each item into **0-based** or **1-based**: BED chromStart · VCF POS · SAM POS · BAM `pos` (binary) · BCF POS · GFF3 start · GTF start · PAF query start · WIG `variableStep` position · bedGraph start · GFA W-line SeqStart · BEDPE start2 · `samtools view` region `chr2:100-200` · `.fai` OFFSET.
@@ -423,7 +423,7 @@ chrM	16569	253404903	70	71
 ```
 (The `.fai` offsets are illustrative.)
 Answer: both VCF `##contig` lines (GRCh37/hg19 lengths, so a build mismatch, XF-11/XF-13) and the BED line (`1` instead of `chr1`, a naming mismatch, XF-12).
-Explanation: lengths reveal the build and names reveal the convention. Neither problem raises an error by itself. They show up later as missing overlaps or nonsense calls. (chr lengths [from memory - verify].)
+Explanation: lengths reveal the build and names reveal the convention. Many tools (e.g. bedtools, bcftools view) raise no error for either problem, so they show up later as missing overlaps or nonsense calls. Dictionary-checking tools such as GATK do reject mismatched contig lengths [from memory - verify]. (chr1 and chrM lengths verified against bedtools `human.hg38.genome` and `human.hg19.genome`.)
 
 **EX-09 · predict · strand and reverse complement**
 Tab-delimited SAM record from the spec: `r001	147	ref	37	30	9M	=	7	-39	CAGCGGCAT	*	NM:i:1`. FLAG 147 includes 0x10. "What did the sequencer actually read for this mate, 5'->3'?"
@@ -483,7 +483,7 @@ Explanation: POS points to the padding base A at 14, and the deleted base's 0-ba
 - d) Undefined. *`+` is a valid quality character. Only the separator line is a lone `+`.*
 
 **Q3.** The child's BAM has `@SQ	SN:chr1	LN:248956422` and a public annotation VCF has `##contig=<ID=1,length=248956422>`. What should you do before intersecting?
-- a) Lift the VCF over to GRCh38. *Wrong: the identical length says it is already GRCh38.*
+- a) Lift the VCF over to GRCh38. *Wrong: the identical length (248,956,422 is GRCh38 chr1) says it is already GRCh38. A matching `md5` would prove it.*
 - b) **Rename contigs consistently (`1` → `chr1`) and verify the other contigs, including the mitochondrion** ✓. *Same build, different naming convention.*
 - c) Nothing, because tools match `1` to `chr1`. *Wrong: most do not, and you would get zero overlaps silently.*
 - d) Re-align the reads to the annotation's naming. *Wasteful: renaming metadata is enough.*
@@ -531,7 +531,7 @@ Explanation: POS points to the padding base A at 14, and the deleted base's 0-ba
 - **BED:** capture targets are the "looked-at" regions. A variant outside them cannot be called. Coordinate conversion from the lab report's 1-based coordinates (EX-03, Q1).
 - **SAM/BAM/CRAM:** reverse-strand mates (EX-09), MAPQ in a repeat (Q8). Archiving to CRAM requires keeping the exact FASTA (XF-10).
 - **WIG:** the exon dip (Q5). WIG is 1-based while the bedGraph export is 0-based.
-- **gVCF → VCF:** the father's low-depth hom-ref (Q6, EX-13). gVCF blocks *prove* reference calls.
+- **gVCF → VCF:** the father's low-depth hom-ref (Q6, EX-13). gVCF blocks carry the evidence (DP, GQ, MIN_DP) for reference calls, and that evidence can be weak.
 - **GTF/GFF3:** phase and frameshift. Does the hit fall in CDS, UTR or intron (EX-14)?
 - **BEDPE/PAF/GFA:** split reads give a breakpoint pair. Long reads map with PAF's 0-based coordinates, and the graph's stable coordinates (rGFA `SO`) tie back to GRCh38.
 - **Capstone:** a case folder in which every file must pass the XF rules (EX-08 extended).
@@ -549,7 +549,7 @@ Explanation: POS points to the padding base A at 14, and the deleted base's 0-ba
 - GFF3 zero-length features vs 1-bp features (both `start = end`).
 - GFA2 positions as tick marks with `$` for the segment end; rGFA stable coordinates; GAF path syntax.
 - CRAM stores alignment start 1-based when not delta-coded, unlike BAM (CRAMv3 §10).
-- CDS boundaries differ between dialects: GTF 2.2 excludes the stop codon from CDS while GFF3 includes it [from memory - verify; GTF 2.2 spec unreachable].
+- CDS boundaries differ between dialects: GTF2/2.2 excludes the stop codon from CDS ("Unlike Genbank annotation, the stop codon is not included in the 'CDS' feature for the terminal exon", GTF2.2 text as quoted verbatim in the NBISweden/AGAT `docs/gxf.md`; the mblab.wustl.edu original is still unreachable), while GFF3 includes it ("The START and STOP codons are included in the CDS", GFF3 1.26). Ensembl GTFs list `stop_codon` as a separate feature outside CDS (Biostars thread on Ensembl release 75, via search summary); GENCODE is believed to do the same [from memory - verify].
 - Region-string parsing when contig names contain `:` (HLA), and the `{name}:beg-end` convention (SAMv1 Appendix A).
 - BED `chrom` regex vs SAM names: HLA contigs are legal in SAM/VCF but not in strict BEDv1.
 - hg19 `chrM` vs rCRS, and why liftover tools often skip the mitochondrion.
@@ -579,3 +579,55 @@ Explanation: POS points to the padding base A at 14, and the deleted base's 0-ba
 - Web-search result summaries only (the underlying pages were not opened): Illumina Q-score binning (illumina.com app note 770-2017-010; knowledge.illumina.com article 000008320); hg19 chrM vs rCRS (Bioconductor bioc-devel thread; biostars.org/p/349420; UCSC hg19 README); Nurk et al. 2022 *Science* 376:44 (T2T-CHM13); Kong et al. 2012 *Nature* 488:471 (de novo rate); exome kit sizes (PMC12408908, Roche, Twist); long-read error profiles (PMC5553090, PMC7671305); analysis sets (GATK article 360041155232, UCSC hg38 description).
 
 **Could not reach (DNS failure for WebFetch; curl blocked):** genome.ucsc.edu (wiggle/FAQ, read via the GitHub mirror instead), hgdownload.soe.ucsc.edu (hg38 analysisSet README), ensembl.org (read via the GitHub mirror instead), ncbi.nlm.nih.gov/grc (GRC definitions of assembly/patch/alt), gatk.broadinstitute.org (reference build article), gencodegenes.org (GENCODE GTF naming), lh3.github.io (reference-choice blog post), mblab.wustl.edu (GTF 2.2 spec), academic.oup.com (Cock et al. 2010 original). Claims that depend on these are marked [from memory - verify].
+
+**Added during the fact-check (2026-10-16, all fetched with curl from raw.githubusercontent.com unless noted):**
+- bedtools chromosome-size files: https://raw.githubusercontent.com/arq5x/bedtools2/master/genomes/human.hg19.genome , .../human.hg38.genome
+- bedtools zero-length interval handling: https://raw.githubusercontent.com/arq5x/bedtools2/master/src/utils/FileRecordTools/Records/Record.cpp (`adjustZeroLength()`)
+- htslib index lookup and index writing: https://raw.githubusercontent.com/samtools/htslib/develop/hts.c (`hts_idx_check_local()`, `bgzf_open(fnidx, ... "wu" : "w")`); SAM parser: .../htslib/develop/sam.c ("SEQ and QUAL are of different length")
+- bcftools manual: https://raw.githubusercontent.com/samtools/bcftools/develop/doc/bcftools.txt (`norm --check-ref`)
+- GTF2/2.2 text quoted verbatim in AGAT docs: https://raw.githubusercontent.com/NBISweden/AGAT/master/docs/gxf.md
+- NovaSeq 6000 bin change: https://github.com/benjjneb/dada2/issues/791 (WebFetch)
+
+## Verification log
+
+Adversarial fact-check carried out 2026-10-16. Every primary spec listed in the Sources was re-downloaded and read independently: SAMv1.tex (VN 1.6), CRAMv3.tex, VCFv4.5.tex (plus the 4.4 and 4.3 change lists), BEDv1.tex, tabix.tex, CSIv1.tex, faidx.5, gff3.md (1.26), GFA1.md, GFA2.md, PAF.md, minimap2.1 (2.31), rGFA.md, bedtools general-usage.rst, the UCSC wiggle, bedGraph and FAQformat pages via the kent mirror, the Ensembl gff.html mirror, Biopython QualityIO.py and IUPACData.py, bwa README-alt.md and run-gen-ref, the CHM13 README, and the htslib/samtools 1.24 man pages. All section numbers cited in the brief were checked against the heading structure of each `.tex` file.
+
+**Checked and correct (no change needed):** every row of the Phred table (Q2 to Q40, +33 and +64 characters); the IUPAC complement table; the 45-bp toy reference (length 45; bases 7-14 = `TTAGATAA`; r001 `8M2I4M1D3M` spans 7..22; r001/2 mismatch at 1-based 42, C->G; TLEN 39); every BED, GFF3, VCF, SAM, PAF and WIG line in §3.8; the SAMv1 §1.2 0-based/1-based quotations; BAM `pos` = POS-1; BCF POS 0-based (§6.3.1); CRAM AP 1-based when not delta-coded (§10.2); the VCF POS telomere rule, REF alphabet and IUPAC reduction rule; the contig-name character set (SAMv1 §1.2.1, VCF 4.5 §1.4.7); BGZF block limits, header bytes, the 28-byte EOF block and the virtual-offset formula; BAI bin sizes and the 2^29-1 limit; the tabix 0x10000 flag; the `.crai` columns; the CRAM `@SQ M5` requirement and the reader MD5 check; the faidx(5) columns and the EX-10 answer (byte 45 = `C`); the GFF3 phase definition and the EX-14 answer (phase 2); the GTF frame meaning (Ensembl and GTF2.2 both match GFF3 phase); the PAF, GAF, GFA1 C/W-line and GFA2 position conventions; the BEDPE conventions; the UCSC WIG 1-based and bedGraph 0-based statements; the Solexa/Illumina +64 ranges; every arithmetic answer (EX-05 0.101; EX-06 and misconception 8 Q≈12.97; EX-11 5.8x and 450x, with 620 M reads for 30x; Q6 GQ 8 ≈ 15.8%; Q8 -10log10(0.5) = 3.01; de novo 2 x 3.1e9 x 1.2e-8 ≈ 74); every REF base in EX-03, EX-13 and EX-15 against the toy reference; the EX-09 reverse complements; every answer key in EX-01 to EX-15 and Q1 to Q8 (each keyed answer correct, each distractor wrong for the stated reason); Kong et al. 2012 (1.20 x 10^-8 per base per generation, 78 trios, 63.2 de novo SNVs per trio, via web search). Case thread: a de novo heterozygous variant in a haploinsufficient gene (SCN1A/Dravet given as an example) is a plausible explanation for unexplained childhood seizures. No patient-specific coordinates or transcript IDs appear in this brief.
+
+**Corrections made:**
+
+| # | Claim (as written) | Correction | Source |
+|---|---|---|---|
+| 1 | §2: "Store reads as placements plus differences (SAM/BAM)" | SAM/BAM store every read base in SEQ, plus a placement (POS + CIGAR). Only CRAM stores read bases as differences against the reference. | SAMv1 §1.4 (SEQ); CRAMv3 §1 |
+| 2 | §2: coordinate conversion is "the most common bug in bioinformatics" | Softened to "one of the most common sources of bugs" (the superlative is unsupported) | no source supports the superlative |
+| 3 | §3.1: "SAM SEQ accepts `=ACMGRSVTWYHKDBN`" | The SAM SEQ regex is `\*\|[A-Za-z=.]+`. Only BAM is limited to those 16 codes, and it maps every other character to `N`. A validator using the 16-code list would wrongly reject valid SAM. | SAMv1 §1.4 table; §4.2.3 |
+| 4 | §3.2 table, §6, EX-08: chr1 lengths 249,250,621 / 248,956,422 "[from memory - verify]" | Verified. Markers replaced with the source. hg19 chrM 16,571 and hg38 chrM 16,569 also verified. | bedtools2 `genomes/human.hg19.genome`, `human.hg38.genome` |
+| 5 | §3.2 Decoys row: "Extra sequences, including EBV" | bwakit defines EBV separately from the decoys (hs38/hs37 = primary + EBV; hs38DH/hs37d5 add decoys). Reworded. | bwakit `run-gen-ref` |
+| 6 | §3.3: HiFi "about Q30 or better" | HiFi is defined as ≥ Q20 (99%), with a typical median around Q30. Still [from memory - verify]. | none reachable |
+| 7 | §3.4: "NovaSeq 6000 (RTA3) emits 2, 12, 23 and 37 (`#`, `-`, `8`, `F`)" | That was the original binning. Since NVCS v1.1 the values are 2, 11, 25 and 37 (`#`, `,`, `:`, `F`), which most real NovaSeq 6000 FASTQ files show. NovaSeq X: 12/24/40 from v1.2 (12/20/37 before), reportedly Q41 top bin from v1.4.0 (search summary only). A hard-coded `#-8F` detector would misclassify real data. | dada2 issue #791 (cites Illumina support); Illumina KB 000008320 via search summary |
+| 8 | §3.6: "rGFA ... each base keeps a stable linear-reference coordinate"; "GFA has S, L, P and W lines" | The stable coordinate is a stable-sequence name plus an offset. Only rank-0 (`SR:i:0`) segments are on the linear reference. GFA1 also has H, C and J lines. | rGFA.md; GFA1.md |
+| 9 | §3.8: the WIG track line is a "required header" | The track line is required only for UCSC custom tracks. For bigWig conversion it "must not be present". | UCSC wiggle.html (kent mirror) |
+| 10 | §3.5: VCF padding rule cited to "§5.1" | The rule is VCF 4.5 §1.6.1(4); §5.1 only has examples | VCFv4.5.tex |
+| 11 | §4.2 `.fai` row: "1-based inclusive (samtools-faidx(1), ...)" | samtools-faidx(1) 1.24 does not state the base. The CRAMv3 §11 example does ("the bases are counted 1-based"). Citation fixed; claim unchanged. | samtools-faidx.1; CRAMv3 §11 |
+| 12 | XF-02: "start ≤ end (except circular features)" | start ≤ end holds always. Origin-crossing features keep it by adding the landmark length to end, so the circular exception is to end ≤ landmark length. | GFF3 1.26 cols 4-5; GTF2.2 via AGAT |
+| 13 | XF-05: placed under "MUST" with "should equal" | The QUAL regex is a MUST. SEQ/QUAL length equality is worded "ought to" in SAMv1, but htslib rejects the record, so severity "error" stands. Wording clarified. | SAMv1 §1.4; htslib `sam.c` |
+| 14 | XF-09: "Random access requires BGZF" (cites CRAMv3 §12) | Applies to BAM, BCF and bgzipped text. CRAM is not BGZF and has its own container/slice random access via `.crai`. | CRAMv3 §12; SAMv1 §4.1 |
+| 15 | XF-17: `bcftools norm --check-ref` "[from memory - verify]" | Verified (modes e, w, x, s) | bcftools.txt (develop) |
+| 16 | XF-26 placed under "(c) tools enforce them; the specs only recommend them" with severity "convention" | It is the reverse: BEDv1 §5 makes it normative ("must not"), and tools tolerate it. Severity changed to "error (strict BEDv1) / warning (permissive)", with a note. | BEDv1 §5 |
+| 17 | XF-27 minimal violation: "index named `x.vcf.tbi` next to `x.vcf.gz`" | Not a violation for htslib, which tries `x.vcf.gz.csi`, `x.vcf.csi`, `x.vcf.gz.tbi` and then `x.vcf.tbi`, so it finds that index. Replaced with a stale-name example (`child.sorted.bam.bai` next to `child.bam`) and documented htslib's lookup order. | htslib `hts.c` `hts_idx_check_local()` |
+| 18 | §6: "A start of `0` anywhere means 0-based" | False for SAM (POS 0 = no position) and VCF (POS 0 = telomere). Restricted to interval-start columns, with the two exceptions stated. Also noted that VCF has no end column. | SAMv1 §1.4; VCF 4.5 §1.6.1(2) |
+| 19 | §6: "CSI is BGZF-compressed in htslib practice [from memory - verify]" | Verified: htslib writes CSI/TBI through BGZF ("w") and BAI uncompressed ("wu"). Also clarified that BGZF "bytes 12-13" are 0-based offsets and assume BC is the first extra subfield. | htslib `hts.c`; SAMv1 §4.1 |
+| 20 | §6: FASTQ "`+` line every 4 lines"; SAM `@HD`/`@SQ`; WIG `track` line as signatures | Added caveats: multi-line FASTQ exists (faidx(5) indexes it), the SAM header is optional, and the WIG track line appears only in custom-track files. A validator must not require them. | faidx(5); SAMv1 §1; UCSC wiggle.html |
+| 21 | §7 #3 and EX-03 explanation: `POS	POS` zero-length intervals "overlap nothing" / "would intersect nothing" | True only under strict half-open arithmetic. bedtools widens zero-length intervals to `[start-1, end+1)`, so `ref	42	42` hits features on bases 42 and 43. Both texts now say the result is tool-dependent and wrong either way. The EX-03 answer key is unchanged. | bedtools2 `Record.cpp` `adjustZeroLength()` and `intersects()` |
+| 22 | EX-08 explanation: "Neither problem raises an error by itself" | Overstated. Many tools stay silent, but dictionary-checking tools (GATK) reject contig-length mismatches [from memory - verify]. The answer key is unchanged. | — |
+| 23 | §7 #12 and §10: gVCF blocks "*prove*" hom-ref | Softened. A reference block carries evidence (DP/GQ/MIN_DP) that can be weak, which is the point of Q6. | VCF 4.5 §5.5 |
+| 24 | Q3 (a) explanation | Added that the identical length marks GRCh38 chr1 and that an `md5` match would prove it | SAMv1 §1.3.2 |
+| 25 | §11: GTF 2.2 excludes the stop codon from CDS "[from memory - verify; GTF 2.2 spec unreachable]" | Verified through a verbatim quotation of the GTF2.2 text ("the stop codon is not included in the 'CDS' feature for the terminal exon"). The GFF3 inclusion rule is also quoted. GENCODE behaviour is still unverified. | AGAT `docs/gxf.md`; GFF3 1.26 |
+
+**Could not verify (markers kept or added):**
+- GRC patch releases do not change chromosome coordinates; GENCODE/UCSC GRCh38 `chr` naming; HLA contig names such as `HLA-A*01:01:01:01` in hs38DH (the bwakit resource FASTA is not in the git repo). All are still [from memory - verify].
+- Typical read lengths (2x150), exome vs genome depths (~100x vs ~30x), PacBio HiFi/CLR and ONT error profiles, SV ≥ 50 bp convention: from memory or search summaries only.
+- Illumina binning specifics (NovaSeq X 12/24/40, v1.4 Q41): illumina.com, support.illumina.com and knowledge.illumina.com are unreachable (DNS failure for WebFetch). Search summary only.
+- GATK rejecting contig-length mismatches; non-htslib tools not finding `x.vcf.tbi`: from memory.
+- SCN1A/Dravet de novo frequency (case hook): from memory. The course owner should still choose the gene.
+- Unreachable during this check: mblab.wustl.edu (GTF2.2 original), web.archive.org, illumina.com hosts, forum.qiime2.org. GitHub API access to benjjneb/dada2 was not enabled, but the issue page itself was read through WebFetch.
