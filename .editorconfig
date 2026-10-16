@@ -1,0 +1,21 @@
+# https://editorconfig.org
+root = true
+
+[*]
+charset = utf-8
+end_of_line = lf
+indent_style = space
+indent_size = 2
+insert_final_newline = true
+trim_trailing_whitespace = true
+
+[*.md]
+# Two trailing spaces are a hard line break in Markdown.
+trim_trailing_whitespace = false
+
+# Exact bytes: never trim whitespace or touch final newlines in fixtures or generated modules.
+[{fixtures/**,src/case/generated/**,*.b64}]
+trim_trailing_whitespace = false
+insert_final_newline = unset
+indent_style = unset
+indent_size = unset

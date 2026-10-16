@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="color-scheme" content="light dark" />
+    <meta name="description" content="An interactive course on the file formats of genomics." />
+    <title>Genomic File Formats</title>
+    <link
+      rel="icon"
+      type="image/svg+xml"
+      href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cpath d='M9 3c14 6 0 20 14 26M23 3C9 9 23 23 9 29' stroke='%230B6B66' stroke-width='3' fill='none' stroke-linecap='round'/%3E%3C/svg%3E"
+    />
+    <script>
+      (function () {
+        try {
+          var theme = localStorage.getItem("genomic-file-formats:theme");
+          if (theme === "light" || theme === "dark") document.documentElement.dataset.theme = theme;
+        } catch (e) {}
+      })();
+    </script>
+  </head>
+  <body>
+    <noscript>
+      <p class="noscript">
+        JavaScript is off. This interactive course needs JavaScript. Save the file and open it in a desktop
+        browser, or use <a href="%PAGES_URL%">%PAGES_URL%</a>.
+      </p>
+    </noscript>
+    <header class="topbar">
+      <a class="brand" href="#/">Genomic File Formats</a>
+      <button type="button" id="theme-toggle" class="theme-toggle" hidden>Theme</button>
+    </header>
+    <div class="layout">
+      <main id="main" tabindex="-1">
+        <div id="fallback" class="fallback">
+          <h1>Genomic File Formats</h1>
+          <p>An interactive course on the file formats of genomics, from FASTA to GFA.</p>
+          <p>
+            This interactive course needs JavaScript. Save the file and open it in a desktop browser, or use
+            <a href="%PAGES_URL%">%PAGES_URL%</a>.
+          </p>
+        </div>
+      </main>
+      <aside id="aside" class="aside" aria-label="Course navigation"></aside>
+    </div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

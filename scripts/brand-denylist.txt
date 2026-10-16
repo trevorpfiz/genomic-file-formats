@@ -1,0 +1,4 @@
+# Brand names that must never appear in the shipped file (docs/PLAN.md O-08, 11.5).
+# One term per line, matched case-insensitively anywhere in dist/index.html.
+anthropic
+claude

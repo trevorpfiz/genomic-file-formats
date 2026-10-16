@@ -1,0 +1,27 @@
+# Version updates for the SHA-pinned actions and the exact-pinned npm dependencies, held back
+# 14 days to match the release-age gate in pnpm-workspace.yaml (docs/PLAN.md D-31).
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    cooldown:
+      default-days: 14
+    groups:
+      github-actions:
+        patterns: ["*"]
+
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+    cooldown:
+      default-days: 14
+    versioning-strategy: increase
+    groups:
+      # The owner-pinned toolchain moves together, by hand: vite-plus pins its own closure.
+      vite-plus:
+        patterns: ["vite-plus", "vite", "@voidzero-dev/*"]
+      remark-and-rehype:
+        patterns: ["unified", "remark-*", "rehype-*", "unist-*", "vfile", "@types/mdast", "@types/hast"]
