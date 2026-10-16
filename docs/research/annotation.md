@@ -41,7 +41,7 @@ In code blocks, **columns are separated by literal TAB characters**. Spaces insi
 - read counters (featureCounts, HTSeq group exons by `gene_id`);
 - variant-effect predictors (Ensembl VEP, SnpEff), which turn "chr2:N C>T" into "gene X, transcript Y, exon 13, c.N, p.Arg→Ter";
 - genome browsers (IGV, JBrowse; usually bgzipped and tabix-indexed);
-- `bedtools`, which needs exons converted to BED for coverage QC (all [from memory - verify] except bedtools, whose docs say "bedtools accounts for the fact the GFF uses a one-based position and BED uses a zero-based start position").
+- `bedtools`, which reads GFF/GTF directly for coverage QC and intersections; no BED conversion is needed. Its docs say "bedtools accounts for the fact the GFF uses a one-based position and BED uses a zero-based start position". Hand-converting to BED is optional, and it is where off-by-one errors creep in. (All entries in this list are [from memory - verify] except bedtools, which is checked against its docs.)
 
 **The disease-analysis question it answers.** The variant caller tells us *where* the child's genome differs. The gene model tells us *what that difference touches*:
 
@@ -89,7 +89,7 @@ The format has to solve four design problems:
 
 Both describe the same gene. Converting between them is a join or an un-join plus the stop-codon adjustment (see GTF-M03).
 
-**Analogy for phase: a book torn into pages and rebound.** Exons are pages, and codons are three-letter words that can straddle a page break. Phase is the note at the top of each page: "skip N letters, they finish the word from the previous page". Delete a page, and the next page's note is wrong unless the deleted page held a whole number of words. That is the **exon length mod 3** rule (section 4).
+**Analogy for phase: a book torn into pages and rebound.** Exons are pages, and codons are three-letter words that can straddle a page break. Phase is the note at the top of each page: "skip N letters, they finish the word from the previous page". Delete a page, and the next page's note is wrong unless the deleted page's letter count was a multiple of three. That holds even when the page starts and ends mid-word, as DEMO1 exon 2 does (phase 2, 150 bp). That is the **exon length mod 3** rule (section 4).
 
 **Why it looks the way it does**
 
@@ -103,7 +103,7 @@ Both describe the same gene. Converting between them is a join or an un-join plu
 
 | # | GFF3 name | GTF name | Content | GFF3 v1.26 rule | GTF2.2 / Ensembl-GENCODE rule |
 |---|---|---|---|---|---|
-| 1 | seqid | seqname | Landmark (chromosome or contig) | No unescaped whitespace; must not start with `>`; escape characters outside `[a-zA-Z0-9.:^*$@!+_?-|]` | Must match the reference: Ensembl uses `2`, GENCODE uses `chr2` [verified: file] |
+| 1 | seqid | seqname | Landmark (chromosome or contig) | No unescaped whitespace; must not start with `>`; escape characters outside `[a-zA-Z0-9.:^*$@!+_?-\|]` | Must match the reference: Ensembl uses `2` (its doc sample uses `1` and `X` [verified: Ensembl source]), GENCODE uses `chr2` [verified: file, v19]. The nf-core "Ensembl-format" excerpt has been renamed to `chr22`, so it is not evidence of Ensembl's own style |
 | 2 | source | source | Program or database | Free text | Free text (`HAVANA`, `ENSEMBL`, `ensembl_havana`) [verified: file] |
 | 3 | type | feature | Feature type | SO term name or `SO:nnnnnnn` accession | GTF2.2: `CDS`, `start_codon`, `stop_codon` required; `5UTR`, `3UTR`, `inter`, `inter_CNS`, `intron_CNS`, `exon` optional. The Ensembl/GENCODE dialect adds `gene`, `transcript`, `UTR` or `five_prime_utr`/`three_prime_utr`, and `Selenocysteine` |
 | 4-5 | start, end | start, end | Interval | Positive 1-based integers, start ≤ end, both ends inclusive | Same |
@@ -139,7 +139,7 @@ ctg1	demo	three_prime_UTR	7302	9000	.	+	.	Parent=tx:DEMO1-201
 | `##gff-version 3` | Must be the first line ("Other Syntax"). `3.1.26` is also legal, but plain `3` is the most portable. |
 | `##sequence-region ctg1 1 12000` | Space-separated. Optional, but "strongly encouraged": it lets parsers bounds-check every feature on `ctg1`. |
 | gene | Top of the tree, so it has an `ID` and no `Parent`. `biotype=` is lowercase, which makes it a free application attribute. Uppercase-initial tags are reserved. |
-| mRNA | `Parent=gene:DEMO1` is a part_of link. IDs may contain `:`; only `; = & ,` are reserved in column 9. |
+| mRNA | `Parent=gene:DEMO1` is a part_of link. IDs may contain `:`. Beyond the characters that are always encoded (tab, newline, CR, `%`, control characters), only `; = & ,` are reserved in column 9. |
 | exon ×4 | Exon IDs are optional because exons have no children here. A second isoform would add its ID to the same exon's `Parent=` list instead of duplicating the line. |
 | CDS ×4 | **Four lines, one feature.** The shared `ID=cds:DEMO1-201` makes them one discontinuous CDS (the "ID" rule), and an ID is mandatory for multi-line features. Phases 0, 2, 2, 1 chain by `next = (phase − length) mod 3`: 100 bp → 2, 150 → 2, 100 → 1. The CDS **includes the stop codon** (NOTE 5), so the total is 651 bp = 217 codons = 216 aa + stop [verified: arithmetic]. |
 | UTR lines | Optional: "implied by the combination of exon and CDS" (NOTE 3). |
@@ -211,10 +211,11 @@ What to notice:
   - phase is counted from `end` (the spec: "the 5' end for CDS features on the minus strand is the feature's end");
   - transcript order runs from high to low coordinates;
   - `exon_number "1"` is the rightmost exon [from memory - verify; Ensembl/GENCODE convention].
-- **Phase chain rule.** Walk a transcript's CDS segments 5'→3' (descending coordinates on `-`). The first complete CDS has phase 0. Then `phase_next = (phase − length) mod 3` [verified: arithmetic against every CDS chain in the GFF3 spec's EDEN example and a RefSeq mouse gene].
+- **Phase chain rule.** Walk a transcript's CDS segments 5'→3' (descending coordinates on `-`). In a 5'-complete CDS, the first segment has phase 0. Then `phase_next = (phase − length) mod 3` [verified: arithmetic against every CDS chain in the GFF3 spec's EDEN example and a RefSeq mouse gene].
 - **In-frame test for an exon deletion.** Deleting (or skipping) an internal, fully coding exon of length L keeps the downstream frame **iff L mod 3 = 0**. Equivalently, the deleted exon's CDS phase equals the next CDS's phase, so you can read it straight off column 8.
   - In-frame still means one codon may change. The codon split across the new junction is rebuilt from different bases.
   - The rule does not cover the exon holding the start or the stop codon.
+  - **Several adjacent exons:** use the summed length. The deletion is in-frame iff (sum of the deleted CDS lengths) mod 3 = 0. Equivalently, the first deleted CDS segment's phase equals the phase of the first retained segment downstream. Each exon alone can shift the frame while the pair does not. The case thread needs this form, because case.md settled on a 4-exon SCN1A deletion (exons 17-20, 1,135 coding nt, 1,135 mod 3 = 1, so a frameshift).
 - **Phase vs "frame".** GFF1 (1997) and GTF2 called column 8 "frame", but it already had today's meaning. GFF1: "'1' indicates that there is one extra base, i.e., that the second base of the region corresponds to the first base of a codon". GTF2: "Note that the frame is not the length of the CDS mod 3".
   - GFF3 renamed the column "phase" and warned that it is not "frame" in the usual sense ("<codon position> modulo 3" relative to the ORF start).
   - The value's meaning never changed between GFF1, GTF and GFF3. Other formats invert it: UCSC genePred `exonFrames` uses 0→0, 1→2, 2→1 (kent `genePred.c`, `phaseToFrame`) [verified: source].
@@ -226,7 +227,7 @@ What to notice:
   - Provider files are `.gtf.gz` / `.gff3.gz`, usually plain gzip [from memory - verify per provider].
   - Random access needs coordinate sorting, then `bgzip`, then `tabix -p gff`. The preset means "one-based positions, `-s 1 -b 4 -e 5 -c '#'`" (tabix(1)), and the man page gives the recipe `sort -t"<TAB>" -k1,1 -k4,4n`.
   - Tests [verified: test]:
-    - an unsorted file fails with `[E::hts_idx_push] Unsorted positions on sequence #1: 7299 followed by 7001`;
+    - an unsorted file fails with an `[E::hts_idx_push] Unsorted positions on sequence #1: A followed by B` error. The section 3.2 GFF3, exactly as printed, gives `7001 followed by 1001`, because its `five_prime_UTR` line comes after exon 4. The section 3.3 GTF happens to be in coordinate order already and indexes without sorting. (The previous version quoted `7299 followed by 7001`, which neither printed file produces; re-tested with pysam 0.24.1);
     - a plain-gzip file fails to index;
     - BGZF output begins with `1f 8b 08 04 ... 42 43` ("BC");
     - querying `ctg1:5050` returns the overlapping `gene`, `mRNA`/`transcript`, `exon` and `CDS` lines.
@@ -247,10 +248,10 @@ Severity:
 | ID | Rule | Spec section | Minimal violation | Severity |
 |---|---|---|---|---|
 | GFF3-S01 | The first line is `##gff-version 3` (optionally `3.x.y`), and it appears only once | "Other Syntax"; changelog 1.21 | Line 1 `# exported by pipeline`, line 2 `##gff-version 3` | error |
-| GFF3-S02 | Exactly 9 TAB-separated columns. Parsers split on tabs only; spaces are legal inside fields | "Description of the Format" | Columns separated by spaces (the spec's own examples render with spaces, a copy-paste trap) | error |
+| GFF3-S02 | Exactly 9 TAB-separated columns. Parsers split on tabs only; spaces are legal inside fields (except seqid, see S04) | "Description of the Format" | Columns separated by spaces (the spec's own examples render with spaces, a copy-paste trap) | error |
 | GFF3-S03 | An undefined field is `.`, never empty | "Description of the Format" | `ctg1<TAB><TAB>gene<TAB>...` | error |
-| GFF3-S04 | seqid has no unescaped whitespace and no leading `>`; characters outside `[a-zA-Z0-9.:^*$@!+_?-|]` are escaped | "Column 1" | `chr 2` | error |
-| GFF3-S05 | type is an SO term or `SO:` accession that is_a `sequence_feature` | "Column 3" | `5UTR` (GTF2.2 vocabulary) instead of `five_prime_UTR` | error by spec; many tools only warn |
+| GFF3-S04 | seqid has no unescaped whitespace and no leading `>`; characters outside `[a-zA-Z0-9.:^*$@!+_?-\|]` are escaped | "Column 1" | `chr 2` | error |
+| GFF3-S05 | type is an SO term or `SO:` accession that is_a `sequence_feature` | "Column 3" | `5UTR` (GTF2.2 vocabulary) instead of `five_prime_UTR` | error by spec; many tools only warn. Validator caveat: real Ensembl/NCBI files write `lnc_RNA`, but current SO (so.obo data-version 2026-08-07) names SO:0001877 `lncRNA` and does not list `lnc_RNA` even as a synonym. RefSeq writes `protein`, which is only a synonym of `polypeptide`. So check against SO names plus an allow-list of known legacy names, or real files fail [verified: so.obo] |
 | GFF3-S06 | start and end are positive 1-based integers with start ≤ end (circular exception) | "Columns 4 & 5"; changelog 1.21 | start `0`; `2000<TAB>1000` | error |
 | GFF3-S07 | score is a floating-point number or `.` | "Column 6" | `high` | error |
 | GFF3-S08 | strand ∈ `+ - . ?` | "Column 7" | `1` | error |
@@ -258,7 +259,7 @@ Severity:
 | GFF3-S10 | Column 9 holds `tag=value` pairs joined by `;`, with multiple values joined by `,`. Values are not quoted; quotes become part of the value | "Column 9" | `gene_id "DEMO1"; transcript_id "DEMO1-201";` | error |
 | GFF3-S11 | Percent-encode tab `%09`, newline `%0A`, CR `%0D`, `%` `%25` and control characters everywhere. In column 9, also encode `;` `%3B`, `=` `%3D`, `&` `%26` and `,` `%2C`. `+` may not stand for a space | "Description of the Format" | `Note=50% GC` (`%` not followed by hex); `Note=see notes; urgent` (`urgent` has no `=`) | error |
 | GFF3-S12 | Only `Parent`, `Alias`, `Note`, `Dbxref` and `Ontology_term` may take several values | "Column 9"; changelog 1.19 | `ID=ex1,ex2` | error |
-| GFF3-S13 | Tags are case-sensitive, and uppercase-initial tags are reserved: only the 11 defined ones may be used | "Column 9" | `Gene_name=DEMO1` (reserved namespace) | error |
+| GFF3-S13 | Tags are case-sensitive, and uppercase-initial tags are reserved: only the 11 defined ones may be used | "Column 9" | `Gene_name=DEMO1` (reserved namespace) | error (tool-enforced). The spec says only "reserved for later use", not MUST, but GenomeTools rejects it: "illegal uppercase attribute ... (uppercase attributes are reserved)" [verified: source] |
 | GFF3-S14 | No end-of-line comments. `#` starts a comment line and `##` a directive | "Other Syntax" | `...;Parent=tx1 # check this` | error |
 | GFF3-S15 | `##sequence-region seqid start end` appears at most once per seqid | "Other Syntax" | Two `##sequence-region ctg1 ...` lines | error |
 | GFF3-S16 | After `##FASTA`, only FASTA may follow. A line starting with `>` implies `##FASTA` | "Other Syntax" (##FASTA) | A feature line after a `>ctg1` record | error |
@@ -301,10 +302,10 @@ Severity:
 | GTF-S02 | start ≤ end; 1-based positive integers | GTF2 (AGAT) | `0<TAB>99` | error |
 | GTF-S03 | strand is `+` or `-` | GTF2/2.2 (AGAT table) | `.` on an exon | error by GTF2.2; tools vary |
 | GTF-S04 | frame is 0-2 on `CDS`, `start_codon` and `stop_codon`; `.` elsewhere | GTF2 frame definition; Ensembl gff.html | `CDS ... +<TAB>.<TAB>` | error |
-| GTF-S05 | Attributes are `key "value";`. Every attribute ends with `;` and is followed by exactly one space (not a tab). Textual values are double-quoted | GTF2 (AGAT); UCSC GTF.html | `gene_id=DEMO1;transcript_id=DEMO1-201` | error |
-| GTF-S06 | `gene_id` and `transcript_id` are present on every line, as the first two attributes ("Any other attributes ... must appear after these two") | GTF2/2.2 (AGAT, UCSC) | An exon line without `transcript_id` | error if missing; the order rule is a convention, since Ensembl puts `gene_version` between them [verified: file] |
-| GTF-S07 | Feature vocabulary and capitalization: the GTF2.2 set; other types "will be ignored" | GTF2.1/2.2 (AGAT) | `cds` or `Exon` (silently ignored) | warning |
-| GTF-S08 | `#` begins a comment anywhere, so fields may not contain `#` | GTF2 (AGAT) | `gene_name "ABC#2"` | warning |
+| GTF-S05 | Attributes are `key "value";`: a key, a space, then the value. Every attribute ends with `;` and is followed by exactly one space (not a tab) before the next one: a MUST in GTF2. Textual values are double-quoted, but that is only a "should" in GTF2 and GTF2.2 (AGAT), and GENCODE leaves numbers unquoted (GTF-C05) | GTF2 (AGAT); UCSC GTF.html | `gene_id=DEMO1;transcript_id=DEMO1-201` (no key/value space, so the key reads as `gene_id=DEMO1` with no value) | error for the separator and key/value form; missing quotes on a number is at most a warning |
+| GTF-S06 | `gene_id` and `transcript_id` are present on every line, as the first two attributes ("Any other attributes ... must appear after these two"; UCSC: "The attribute list must begin with the two mandatory attributes") | GTF2/2.2 (AGAT, UCSC) | An exon line without `transcript_id` | error if missing. The order rule is also a MUST in the spec text, but current Ensembl violates it by putting `gene_version` between them [verified: file], so validators should only warn on order |
+| GTF-S07 | Feature vocabulary: the GTF2.2 set; other types "will be ignored" (GTF2.1 wording quoted by AGAT). The rule that types are case-sensitive ("correct capitalization") is [from memory - verify: GTF2.2 page unreachable] | GTF2.1/2.2 (AGAT) | `cds` or `Exon` (silently ignored) | warning |
+| GTF-S08 | `#` begins a comment anywhere, so fields may not contain `#` ("all fields are prohibited from containing # characters") | GTF2 (AGAT) | `gene_name "ABC#2"` | error by the GTF2 text (data are truncated at `#`); tools vary, since GFF2 said `#` inside quoted values is not a comment and many modern parsers follow that |
 
 ### 5e. GTF: semantic and consistency
 
@@ -313,7 +314,7 @@ Severity:
 | GTF-M01 | All lines of one `transcript_id` share seqname, strand and `gene_id` | GTF2.2 semantics; UCSC kent errAbort "all group members must be on same seq and strand" [verified: source] | One exon of a `+` transcript on `-` | error |
 | GTF-M02 | `gene_id` and `transcript_id` are globally unique: the same transcript_id is never reused under two genes | GTF2 ("A unique identifier"); UCSC ("globally unique") | `transcript_id "T1"` under genes A and B | error |
 | GTF-M03 | The CDS **excludes** the stop codon; `stop_codon` is separate | GTF2 (AGAT) [verified: file, Ensembl output, see Q6] | CDS ending at the `stop_codon` end | error (off-by-3 in conversions) |
-| GTF-M04 | `start_codon` and `stop_codon` each total 3 bp per transcript; they may split over two lines when an intron interrupts them | GTF2 (AGAT) | A lone 2-bp `stop_codon` | error |
+| GTF-M04 | When present, `start_codon` and `stop_codon` each total 3 bp per transcript; they may split over two lines when an intron interrupts them. (GTF2 says "should"; 5'- or 3'-incomplete models legitimately lack them) | GTF2 (AGAT) | A lone 2-bp `stop_codon` | error |
 | GTF-M05 | CDS and codon features lie inside the same transcript's exons | GTF2.2 [from memory - verify] | A CDS extending into an intron | error |
 | GTF-M06 | Frames chain as in GFF3-M08 | GTF2 frame definition | `0,0,2,1` for lengths 100, 150, 100, 298 | error |
 | GTF-M07 | seqname style and build match the reference | Consistency | Ensembl `2` against a `chr2` BAM; GENCODE v19 (GRCh37) against GRCh38 reads | error (pipeline) |
@@ -347,11 +348,12 @@ Severity:
    - `gene_id "..."; transcript_id "...";` means GTF;
    - free text such as `Target "HBA_HUMAN" 11 55 ; E_value 0.0003` (GFF2 spec) or a bare group token such as `touch1` (UCSC GFF example) means GFF2 or GFF1-style.
 4. **Column 3 vocabulary**:
-   - `mRNA`, `five_prime_UTR`, `lnc_RNA`, `pseudogenic_transcript`, `biological_region` mean GFF3/SO [verified: file];
-   - `transcript`, `start_codon`, `stop_codon`, `UTR`, `5UTR` mean GTF.
+   - `mRNA`, `five_prime_UTR`, `lnc_RNA`, `pseudogenic_transcript`, `biological_region` mean GFF3 [verified: file]. All are SO names except `lnc_RNA`, the older name Ensembl still writes; current SO calls it `lncRNA` (see GFF3-S05);
+   - `5UTR`/`3UTR` (and `inter`, `inter_CNS`, `intron_CNS`) are GTF2.2-only and not SO terms, so they mean GTF;
+   - `transcript`, `start_codon`, `stop_codon` and `UTR` are *typical* of GTF, but they are also legal SO terms (SO:0000673, SO:0000318, SO:0000319, SO:0000203) and can appear in valid GFF3 [verified: so.obo]. They are a weak cue, so decide on column 9.
 5. **Producer header comments**:
    - `##description:` / `##provider: GENCODE` / `##format: gtf` means GENCODE GTF [verified: file];
-   - `#!genome-build` means Ensembl;
+   - `#!genome-build` suggests Ensembl, but NCBI GFF3 files also carry `#!genome-build` [from memory - verify], so it does not separate the two; column 9 does;
    - `#!gff-spec-version`, `#!processor` mean NCBI GFF3 [from memory - verify].
 
 | Cue | GFF3 | GTF | GFF2 |
@@ -375,7 +377,7 @@ Severity:
    - Column 9 syntax differs, and so does the CDS end.
    - A real Ensembl transcript (CCT8L2-201) has a CDS of 1,674 bp in GFF3 and 1,671 bp in GTF. The GTF writes the 3-bp `stop_codon` separately [verified: file].
    - A converter that ignores this shifts every stop codon.
-2. **"GFF is 0-based like BED."** It is 1-based and closed, so `end − start` is off by one; the length is `end − start + 1`. Turning GTF exons into a BED without subtracting 1 from start shifts every exon by one base (XF-15 in the foundations notes).
+2. **"GFF is 0-based like BED."** It is 1-based and closed, so `end − start` is off by one; the length is `end − start + 1` (XF-15 in the foundations notes). Turning GTF exons into a BED without subtracting 1 from start does not shift the exon. It drops the first base of every exon: GTF `1001-1300` written as BED `1001 1300` covers only 1-based bases 1002-1300, 299 bp.
 3. **"Phase is start mod 3" or "phase is the frame of the exon".**
    - Phase is the number of bases to skip at the 5' end of *this CDS segment*.
    - It belongs to a CDS segment *within a transcript*, not to the exon: the same exon has phase 0 in one EDEN isoform and phase 1 in another (spec example).
@@ -391,13 +393,13 @@ Severity:
     - several pathological-case CDS lines have phase `.` despite NOTE 4;
     - one example writes `Target=cdna0123+12+462`, using the forbidden `+`-for-space;
     - its FASTA header reads `>cnda0123`;
-    - EDEN `cds00001` totals 2,305 bp, which is not a multiple of 3 [verified: arithmetic].
+    - EDEN `cds00001` totals 2,305 bp and `cds00002` totals 1,402 bp; neither is a multiple of 3 [verified: arithmetic]. (Their phase chains are internally consistent.)
     - The phase values themselves were fixed in v1.15 and v1.16 (changelog). Even the authors found phase easy to get wrong.
 11. **"chr2 and 2 are interchangeable."** Ensembl uses `2` and GENCODE uses `chr2`. A mismatch gives empty intersections, not errors.
 12. **"Any GTF works with my BAM."** A GENCODE v19 header says GRCh37 [verified: file], and its coordinates are wrong for GRCh38 reads.
 13. **"One gene, one transcript."** Consequences are per transcript. Report against MANE Select, and check other isoforms.
 14. **"`sort` is harmless."** Coordinate sorting breaks `###` blocks and any `##FASTA` section. tabix needs it anyway, so sort a copy.
-15. **"Public files are clean."** A widely used nf-core test GFF3 has no `##gff-version` line. One of its lines reads `...<TAB>2<TAB>48e<TAB>03<TAB>. . external_name=...`: a score of `2.48e+03` was mangled into three columns, giving strand `48e` and phase `03` [verified: file]. Validate before trusting.
+15. **"Public files are clean."** A widely used nf-core test GFF3 has no `##gff-version` line. One of its lines reads `...<TAB>2<TAB>48e<TAB>03<TAB>. . external_name=...`: a score of `2.48e+03` was mangled into three columns, giving strand `48e` and phase `03` [verified: file]. The line still has exactly 9 tab fields, so a column-count check passes; only the strand (S08) and phase (S09) checks catch it. Validate before trusting.
 16. **"Dictionary parsing of GTF is safe."** Repeated `tag` keys collapse to one value.
 
 ## 8. Exercise bank
@@ -427,7 +429,7 @@ Answers:
 - **A → GFF3**: version line, `=` attributes.
 - **B → GTF**: quoted values and the two mandatory IDs.
 - **C → GFF2**: ACeDB-style tag-values, no gene_id/transcript_id (this is the GFF2 spec's own example).
-- **D → GFF2**: a bare group token (UCSC's GFF example).
+- **D → GFF2**: a bare group token (UCSC's GFF example, which UCSC files under GFF2). Strictly, a bare token is the GFF1 `[group]` style; GFF2 expects tag-value pairs. It is still the best of the four bins.
 - **E → Not GFF-family**: BED12, 0-based. This is DEMO1 itself: exon 1001-1300 becomes block 0+300.
 - **F → GTF**: a GENCODE v19 gene line, trimmed [verified: file].
 
@@ -458,8 +460,8 @@ Each round shows the section 3.2 file with one line altered, and the learner cli
 1. The error is column 8 `.` on a CDS (GFF3-S09). A translator cannot know where codons start.
 2. The error is that `Parent` does not resolve (GFF3-M03).
 3. The error is lowercase `parent` (GFF3-M13). It is legal syntax, but exon 3 silently leaves the transcript.
-4. The error is start `0`: GFF is 1-based (GFF3-S06). Someone pasted BED coordinates.
-5. The other three CDS lines still say `cds:DEMO1-201`, so the error is the ID. The protein is now split into two features, and the second has a single segment (GFF3-M01/M02).
+4. The error is start `0`: GFF is 1-based (GFF3-S06). A 0 is the signature of 0-based coordinates leaking in; here they are the BED12 block offset `0` and size `300` from EX-01 E. (Real BED for this exon would be `1000 1300`.)
+5. The other three CDS lines still say `cds:DEMO1-201`, so the error is the ID. Each line is legal on its own: a transcript may hold several CDS features, as EDEN's mRNA00003 does. Rules M01 and M02 are therefore *not* violated. The error shows up in the phase chain (GFF3-M08). With exon 3's segment gone, `cds:DEMO1-201` runs 3001-3150 (phase 2, 150 bp) → 7001-7301, which should have phase 2 but says 1. Meanwhile `cds:DEMO1-202` is a lone 100-bp fragment with no start codon. The protein has been split in two.
 
 **EX-04 · fix-it · Percent-encoding**
 
@@ -499,6 +501,8 @@ The three fixes:
 - frame `0` on the CDS, which is the first coding segment (GTF-S04);
 - the missing `transcript_id` (GTF-S06).
 
+Validator scope: run only the line-level rules (GTF-S01 to S08), plus "CDS inside an exon of the same transcript". The two lines are an excerpt, not a whole transcript: they have no `start_codon`/`stop_codon` lines, which GTF2.2 lists as required feature types, and the CDS is incomplete. Transcript-level checks (GTF-M04, GTF-M06) would therefore reject even the keyed answer.
+
 **EX-06 · simulator · Phase chain and exon skipping**
 
 The table lists DEMO1-201's CDS segments with a length column, and the phase cells are empty. Learners fill in the phases using `(phase − length) mod 3`: the answers are 0, 2, 2, 1. The simulator then draws the codon grid across exons.
@@ -524,7 +528,7 @@ Use DEMO1-201 (GFF3 in section 3.2). For each position, choose one of: 5' UTR, C
 |---|---|---|
 | ctg1:1150 | 5' UTR, c.-51 | c.1 = 1201, so 1150 = c.−51 |
 | ctg1:3050 | CDS, c.150, codon 50, third base | Segment 1 holds 100 bp; 3001 = c.101 [verified: arithmetic] |
-| ctg1:3152 | Intron 2, c.150+2: canonical splice donor | Exon 2 ends at 3150 |
+| ctg1:3152 | Intron 2, c.250+2: canonical splice donor | Exon 2 ends at 3150, which is c.250 (exon 2 holds c.101-c.250) [verified: arithmetic] |
 | ctg1:7300 | Stop codon, c.650, second base: potential stop-loss | Inside the GFF3 CDS (7001-7301). In the GTF, 7300 hits only `stop_codon`, not `CDS`, so a naive "is it in a CDS line?" query on the GTF misses it |
 
 **EX-09 · fix-it · Minus-strand phases**
@@ -560,6 +564,7 @@ The problems:
 2. `ID=;` is an empty ID. GenomeTools reports "has no value".
 3. The trailing comma in `Parent=...,` creates an empty parent (GFF3-M03).
 4. A multi-line CDS has no `ID`, so a strict reader sees separate CDS features (GFF3-M02).
+5. The `protein` line has two more problems. `protein` is not an SO term name; it is only an exact synonym of `polypeptide` (SO:0000104), so GFF3-S05 fails. And in SO, a polypeptide `derives_from` the CDS; it is not `part_of` the mRNA. So `Parent=XM_001475631.1` is a non-part_of Parent link (GFF3-M04), where `Derives_from=` is meant, as in the spec's intein example [verified: so.obo]. Few tools check SO relations, so present this one as the "expert" catch. The answer key must accept clicks on it.
 
 The phases are fine: in the full file they chain 0, 0, 0, 2, 2 over a 342-bp CDS [verified: arithmetic]. This exercise shows that "real" does not mean "valid".
 
@@ -569,7 +574,7 @@ Bins: **GFF3 v1.26 requires**, **GTF2.2 requires**, **Both require**, **Conventi
 
 | Statement | Bin |
 |---|---|
-| Values in double quotes | GTF2.2 |
+| Attributes end in `;` and are separated by exactly one space | GTF2.2 (a "must"; replaces "Values in double quotes", which is only a "should" in GTF2/2.2 and is ignored for numbers by GENCODE) |
 | `##gff-version 3` on line 1 | GFF3 |
 | CDS includes the stop codon | GFF3 (NOTE 5) |
 | CDS excludes the stop codon | GTF2.2 |
@@ -620,7 +625,7 @@ What is it?
 
 - a) Valid GFF3. *No `##gff-version` line, and there is no `=` in column 9.*
 - **b) A GTF misnamed `.gff3`. A GFF3 parser will reject or misread column 9.** ✔ *Quoted `key "value";` pairs are GTF syntax.*
-- c) GFF2. *Close, since GTF is a GFF2 dialect, but `gene_id` and `transcript_id` make it GTF.*
+- c) GFF2. *Close, since GTF is a GFF2 dialect, but the `gene_id` key and GENCODE's `gene_type` vocabulary make it GTF. This gene line has no `transcript_id`, which is the current Ensembl/GENCODE convention (GTF-C02).*
 - d) BED. *BED has integer columns 2 and 3.*
 
 **Q2.** A heterozygous deletion removes one internal, fully coding exon of 127 bp. Prediction?
@@ -666,12 +671,12 @@ What is it?
 - c) 1000, 1299. *That loses the last base.*
 - d) 1001, 1301. *That shifts the interval right.*
 
-**Q8.** Which GFF3 pattern is valid?
+**Q8.** Which GFF3 pattern is valid *and* builds the intended gene-model hierarchy? (The previous stem, "Which GFF3 pattern is valid?", had two correct answers, because option d is legal syntax.)
 
 - **a) Four CDS lines sharing `ID=cds1`, `Parent=tx1`, at different exons.** ✔ *One discontinuous feature.*
 - b) Two exon lines sharing `ID=ex5`, one with `Parent=tx1` and one with `Parent=tx2`, at the same coordinates. *Write one line with `Parent=tx1,tx2`. Same-ID lines must collectively form a single feature.*
-- c) `ID=ex5;Parent=tx1;Parent=tx2`. *A repeated tag. Use a comma list.*
-- d) An exon with `parent=tx1`. *Valid syntax, but it creates no hierarchy.*
+- c) `ID=ex5;Parent=tx1;Parent=tx2`. *A repeated tag. Use a comma list. (The spec only shows the comma form; GenomeTools rejects the repeat with "more than one Parent attribute" [verified: source].)*
+- d) An exon with `parent=tx1`. *Legal syntax, but it builds no hierarchy: the exon is orphaned (GFF3-M13).*
 
 **Q9.** The case folder's annotation begins `##description: evidence-based annotation of the human genome (GRCh37), version 19 (Ensembl 74)`, but the reads were aligned to GRCh38. Best action?
 
@@ -684,15 +689,16 @@ What is it?
 
 - **Lesson opener.** The VCF lesson ends with one de novo SNV in the proband. "chr2:N C>T: so what?" A coordinate means nothing without the gene model, and this lesson supplies it.
 - **Choosing the gene** (the sequences notes defer this decision here).
-  - SCN1A is a natural pick. De novo SCN1A variants are the classic cause of Dravet syndrome. It sits on chr2 at about 166.0 Mb (GRCh38) on the **minus strand** [from memory - verify locus, strand and MANE transcript].
+  - SCN1A is a natural pick. De novo SCN1A variants are the classic cause of Dravet syndrome. It sits on chr2 at about 166.0 Mb (GRCh38) on the **minus strand**. case.md records it as `chr2:165,984,641-166,149,214`, strand −, MANE Select ENST00000674923.1, checked there against GENCODE v43. Ensembl, GENCODE and UCSC were unreachable from this check, so this note's copy rests on case.md.
   - The minus strand is a feature, not a bug: it forces the descending-order, phase-from-`end` and exon_number-from-the-right lessons.
   - Real lines should be extracted at build time from a pinned GENCODE release (MANE Select transcript only) and reduced to 4-6 exons for display. Keep the toy DEMO1/DEMO2 for arithmetic drills.
 - **WIG → GTF.**
   - The coverage dip over one exon becomes: look up the exon in the MANE transcript, then compute length mod 3, or compare the phases.
   - Make the dipped exon's length **not** divisible by 3, so the call is a frameshift and therefore likely loss of function.
   - Optionally offer a second exon whose deletion would be in-frame, as a contrast.
+  - Superseded detail: case.md made the dip span **4 exons** (SCN1A exons 17-20, 1,135 coding nt, so a frameshift), with exons 17-19 (1,014 nt, in-frame) as the contrast. Teach the summed-length form of the rule (section 4).
 - **VCF → GTF.** Map the de novo SNV to transcript, exon, c. position and codon, as in EX-08. Include one decoy de novo variant in an intron far from splice sites, and one in a non-MANE-only exon (EX-13).
-- **BEDPE → GTF.** The split-read breakpoint pair lands in intron N of the candidate gene and in an intergenic region. Learners convert GTF exons to BED to run `bedtools intersect`; the off-by-one trap is EX-12.
+- **BEDPE → GTF.** The split-read breakpoint pair lands in intron N of the candidate gene and in an intergenic region. Learners convert GTF exons to BED to run `bedtools intersect`; the off-by-one trap is EX-12. Say plainly that bedtools also accepts the GTF directly and fixes the 1-based start itself. The manual conversion is there to teach the coordinate shift, not because the tool needs it.
 - **PAF/GFA.** Annotation coordinates belong to one assembly. When long reads resolve the rearrangement on a new haplotype or graph path, the gene model must be lifted over before exon numbers mean anything.
 - **Capstone case folder.** Candidate files:
   - `annotation/gencode.v19.annotation.gtf`: wrong build (Q9).
@@ -700,10 +706,11 @@ What is it?
   - `annotation/candidates.gtf`: GFF3 attributes in a `.gtf` file.
   - `annotation/exons.bed`: built from the GTF without subtracting 1.
   - A correct `gencode.vNN.basic.annotation.gtf.gz` plus `.tbi`, with a magic-byte check that it is BGZF, not plain gzip.
+  - Reconcile with case.md, which already fixes the annotation files as CASE-F11 (`annotation/SCN1A_SCN9A.MANE.gtf`, a valid control) and CASE-F12 (`annotation/SCN1A.MANE.gff3`, exon-21 CDS phase `0` instead of `2`).
 
 ## 11. "Read more" candidates
 
-- **The Gap attribute vs SAM CIGAR.** Gap writes the operation before the length, space-separated: `M8 D3 M6 I1 M6` vs CIGAR `8M3D6M`. For protein-to-nucleotide matches, M/I/D count residues at 1:3. It has F/R frameshift operators ("The Gap Attribute").
+- **The Gap attribute vs SAM CIGAR.** Gap writes the operation before the length, space-separated: `M8 D3 M6 I1 M6` vs CIGAR `8M3D6M1I6M` (same I/D meaning: D = gap in the target/query, I = gap in the reference). For protein-to-nucleotide matches, M/I/D count residues at 1:3. It has F/R frameshift operators ("The Gap Attribute").
 - **Target strand rule.** "The source and target strands will be multiplied together": `+/-` means reverse-complement the target ("Transcript-Relative Alignments").
 - **Circular genomes:** `Is_circular=true` and an end coordinate past the landmark length.
 - **Percent-encoding inconsistencies** in the spec. It says "no other characters may be encoded", yet asks for `%20` inside Target IDs and requires escapes in seqids outside `[a-zA-Z0-9.:^*$@!+_?-|]`. Robust parsers decode any `%XX`.
@@ -718,7 +725,7 @@ What is it?
   - AGAT's unofficial labels "GTF2.5" (GENCODE, 2012) and "GTF3" (Ensembl ≥ 82, `five_prime_utr`/`three_prime_utr`).
 - **UCSC genePred `exonFrames`**: the inverse of phase. Also the old stop-codon discrepancy between gene tracks (AGAT, quoting the UCSC FAQ).
 - **GENCODE vs Ensembl GTF.** The same models, but GENCODE duplicates the chrX/chrY PAR genes and ships a reference-chromosomes-only file (AGAT, citing the GENCODE FAQ).
-- **In-frame is not harmless.** It changes the junction codon, can create a stop, and can remove a critical domain. Frameshifts upstream of the last exon junction typically trigger nonsense-mediated decay (the ~50-55 nt rule) [from memory - verify].
+- **In-frame is not harmless.** It changes the junction codon, can create a stop, and can remove a critical domain. What triggers nonsense-mediated decay is where the *premature stop* lands, not where the frameshift starts. A stop more than ~50-55 nt upstream of the last exon-exon junction typically triggers NMD; one in the last exon, or near the end of the penultimate exon, typically escapes it [from memory - verify].
 - **Directives:** `##feature-ontology`, `##species` (an NCBI Taxonomy URL), `##genome-build`.
 - **Dbxref parsing:** split on the first colon only.
 - **Dialects of GFF3:** GVF (variants) and mirGFF3 (miRNA isoforms, mentioned in the spec).
@@ -757,3 +764,109 @@ What is it?
   - NCBI MANE README mirrors;
   - api.github.com.
 - **Consequences:** claims about current GENCODE attribute lists, `level` meanings, MANE tags, Ensembl `#!` headers, `exon_number` ordering and the GTF2.2-specific wording beyond AGAT/UCSC are marked [from memory - verify].
+
+## Verification log
+
+Adversarial fact-check, 2026-10-16. I re-fetched each primary source myself rather than trusting the citations above:
+
+- GFF3 v1.26 (SO GitHub);
+- AGAT `gxf.md` and its GFF2 snapshot `sanger_gff2.html`;
+- Ensembl webcode `gff.html` / `gff3.html`;
+- UCSC `GTF.html`, `FAQformat.html` and `genePred.c`;
+- GenomeTools `gff3_parser.c`;
+- htslib `tabix.1`;
+- bedtools `general-usage.rst`, plus `genomes/human.hg38.genome`;
+- Sequence Ontology `so.obo` (data-version 2026-08-07);
+- the nf-core, GENCODE v19 and RefSeq mouse excerpts.
+
+I re-ran the toy files with pysam 0.24.1 (tabix) and gffutils 0.14, and recomputed every phase chain, c. position and length with a script.
+
+### Corrections made (claim → correction → source)
+
+| # | Where | Claim | Correction | Source |
+|---|---|---|---|---|
+| 1 | §8 EX-08 | ctg1:3152 = "c.150+2" | **c.250+2**. Exon 2 (3001-3150) holds c.101-c.250 | arithmetic on §3.2 |
+| 2 | §8 EX-03 round 5 | Changed CDS ID violates GFF3-M01/M02 | Neither is violated: a transcript may have several CDS features (EDEN mRNA00003). The detectable error is a GFF3-M08 phase-chain break (3001-3150 phase 2, 150 bp → next should be 2, file says 1) | GFF3 v1.26 "Column 9" (ID) and Canonical Gene; script |
+| 3 | §8 EX-10 | Four problems listed ("click every problem") | Added a 5th: `protein` is not an SO term name (it is a synonym of `polypeptide`), and polypeptide `derives_from` CDS, so a `Parent=` to the mRNA is not part_of (GFF3-S05, GFF3-M04) | so.obo; GFF3 "Parent (part_of) Relationships"; intein example |
+| 4 | §9 Q8 | Single-select "Which GFF3 pattern is valid?" keyed a only | Option d (`parent=tx1`) is also legal syntax, as its own explanation says, so there were two right answers. Stem now asks for "valid *and* builds the intended hierarchy" | GFF3 "Column 9" (case-sensitive tags) |
+| 5 | §9 Q1 (c) | Explanation: "`gene_id` and `transcript_id` make it GTF" | The snippet has no `transcript_id`. Explanation now cites `gene_id`/`gene_type` and GTF-C02 | the Q1 snippet itself |
+| 6 | §8 EX-11 | "Values in double quotes" → "GTF2.2 requires" | GTF2 and GTF2.2 say quotes "should" be used, and GENCODE leaves numbers unquoted, so the item was arguably "convention". Replaced it with a true MUST: "`;` then exactly one space" | AGAT GTF2 text and GTF table |
+| 7 | §5d GTF-S06 | "the order rule is a convention" | The order rule is a MUST in GTF2 ("must appear after these two") and in UCSC ("must begin with the two mandatory attributes"); Ensembl violates it. Severity guidance kept at warn-only | AGAT GTF2 text; UCSC GTF.html; nf-core genome.gtf |
+| 8 | §5d GTF-S08 | Severity "warning" | "All fields are prohibited from containing # characters" is a prohibition, so it is an error by the note's own scale, with "tools vary" | AGAT GTF2 text; GFF2 text on `#` in quotes |
+| 9 | §5d GTF-S05 | "Textual values are double-quoted" (error) | Separated the MUST (separator, key/value form) from the "should" (quotes) | AGAT GTF2/GTF2.2 |
+| 10 | §5d GTF-S07 | Capitalization rule attributed to AGAT | AGAT does not state it; marked [from memory - verify] | AGAT `gxf.md` |
+| 11 | §5d GTF-M04 | start/stop codons must total 3 bp | Added "when present" and GTF2's "should"; incomplete models lack them | AGAT GTF2 text |
+| 12 | §5a GFF3-S13 | Severity error, implied by spec | The spec says only "reserved for later use" (no MUST); error is tool-enforced by GenomeTools ("illegal uppercase attribute") | GFF3 "Column 9"; `gff3_parser.c` |
+| 13 | §5a GFF3-S05 | (no caveat) | Validator caveat: Ensembl/NCBI `lnc_RNA` is not in current SO (now `lncRNA`, SO:0001877); RefSeq `protein` is only a synonym. Strict checks would fail real files | so.obo 2026-08-07 |
+| 14 | §5a GFF3-S02 | "spaces are legal inside fields" | Except seqid (S04) | GFF3 "Column 1" |
+| 15 | §6 cue 4 | `transcript`, `start_codon`, `stop_codon`, `UTR` "mean GTF" | They are also SO terms (SO:0000673/0318/0319/0203), legal in GFF3; only `5UTR`/`3UTR`/`inter*`/`intron_CNS` are GTF-only | so.obo |
+| 16 | §6 cue 4 | `lnc_RNA` listed as an SO term | Older name; current SO says `lncRNA` | so.obo |
+| 17 | §6 cue 5 | `#!genome-build` "means Ensembl" | NCBI GFF3 also uses it [from memory - verify]; not discriminating | memory (NCBI pages unreachable) |
+| 18 | §1 consumers | bedtools "needs exons converted to BED" | bedtools reads GFF/GTF directly and handles the 1-based start; the note's own quote says so | bedtools `general-usage.rst` (GFF section) |
+| 19 | §7 #2 | Not subtracting 1 "shifts every exon by one base" | It **drops the first base** (start moves, end does not), so each exon is 1 bp short | arithmetic |
+| 20 | §2 analogy | Deleting a page is safe if it "held a whole number of words" | Safe iff its letter count is a multiple of 3, even when the page starts and ends mid-word (DEMO1 exon 2: phase 2, 150 bp) | arithmetic |
+| 21 | §4 tabix test | Unsorted error "7299 followed by 7001" | Not produced by either printed file. The §3.2 GFF3 gives "7001 followed by 1001"; the §3.3 GTF is already sorted and indexes fine | pysam 0.24.1 re-run |
+| 22 | §4 in-frame test | Single-exon rule only | Added the multi-exon form (sum of lengths mod 3; first-deleted vs first-retained phase) that case.md's 4-exon SCN1A deletion needs | arithmetic; case.md |
+| 23 | §3.1 col 1 | "Ensembl uses `2` [verified: file]" | The cited "Ensembl-format" nf-core file uses `chr22`. Re-attributed to the Ensembl doc sample (`1`, `X`) | nf-core genome.gtf/gff3; Ensembl `gff.html` |
+| 24 | §3.2 mRNA row | "only `; = & ,` are reserved in column 9" | Clarified that tab, newline, CR, `%` and control characters are always encoded as well | GFF3 "Description of the Format" |
+| 25 | §8 EX-03 round 4 | "Someone pasted BED coordinates" | BED for this exon is `1000 1300`; `0`/`300` are the BED12 block offset and size (EX-01 E) | EX-01 E arithmetic |
+| 26 | §8 EX-05 | Keyed answer called "valid GTF" | It is valid only under line-level rules. Transcript-level rules (GTF2.2's required start/stop codon features; GTF-M04/M06) would reject the 2-line excerpt, so the validator scope is now stated | AGAT GTF2.2 feature list |
+| 27 | §11 Gap vs CIGAR | `M8 D3 M6 I1 M6` vs CIGAR `8M3D6M` | Full equivalent is `8M3D6M1I6M` (21 query bases, 23 reference bases) | GFF3 "The Gap Attribute" example |
+| 28 | §11 NMD | "Frameshifts upstream of the last exon junction trigger NMD" | NMD depends on the *premature stop's* position (>~50-55 nt upstream of the last junction); still [from memory - verify] | memory |
+| 29 | §10 hooks | SCN1A locus/strand/MANE [from memory]; single-exon dip; capstone files | Cross-referenced case.md's GENCODE v43 values and its 4-exon (17-20) design and CASE-F11/F12 files; noted bedtools reads GTF directly | case.md (not independently re-verified; see below) |
+| 30 | §8 EX-01 D | "GFF2" | Kept as the best bin, but noted that a bare group token is GFF1-style; GFF2 expects tag-value pairs | AGAT GFF1/GFF2 text; UCSC FAQformat |
+| 31 | §7 #10 | Only cds00001 cited | Added cds00002 = 1,402 bp (also not a multiple of 3) | arithmetic on spec |
+| 32 | §7 #15 | (addition) | The mangled line still has 9 fields, so only the strand and phase checks catch it | nf-core genome.gff3 |
+| 33 | §3.1 row 1, §5a GFF3-S04 | Character set `[a-zA-Z0-9.:^*$@!+_?-\|]` inside a table cell | The unescaped pipe character split the cell in GitHub-flavoured Markdown, so the displayed set was truncated. Escaped as `\|`. Anyone copying the set into a validator regex must take it from the spec | GFF3 "Column 1"; GFM table rules |
+
+### Checked and found correct (no change)
+
+- **DEMO1:**
+  - phases 0, 2, 2, 1;
+  - GFF3 CDS 651 bp (217 codons) vs GTF 648 bp + 3-bp `stop_codon`;
+  - c.1 = 1201, ctg1:1150 = c.−51, ctg1:3050 = c.150 (codon 50, third base), ctg1:7300 = c.650;
+  - exon-2 skip gives 166 aa and a junction codon of c.100 + c.251-252;
+  - exon-3 deletion is a frameshift (phases 2 vs 1);
+  - DEMO1-202 phases 0, 2, 1.
+- **DEMO2:** phases 0, 2, 0, 0 in file order, the left-to-right wrong answer 0, 0, 1, and the codon start at 5198.
+- **Quiz arithmetic:** Q2 (127 mod 3 = 1), Q3 (phase 2), Q4 (phase 1, codon at 6099), Q5 (a, c, d valid), Q6 (1,674 vs 1,671 + 3; GTF shift −16,572,026), Q7 (BED 1000, 1300).
+- **EX-12:** 7302-9000 → BED 7301 9000.
+- **Spec arithmetic:** the EDEN phase chains (spec v1.26) and the RefSeq mouse chain 0, 0, 0, 2, 2 over 342 bp.
+- **EX-01:** the BED12 line in E is a correct encoding of DEMO1 (blocks, thickStart/End).
+- **Real-file details:**
+  - GENCODE v19: header lines, `transcript_id` = `gene_id` on the gene line, unquoted `exon_number`/`level`, double spaces;
+  - Ensembl-format nf-core files: `gene_version` between the IDs, repeated `tag`, `ensembl_phase=-1`, `%2C` in `description`, no `##gff-version`, the mangled `2 / 48e / 03` line.
+- **GFF3 spec quotes:** NOTE 3/4/5, Column 8 minus-strand wording, `###`, `##sequence-region` (once per seqid; bounds), `##FASTA`/`>` rule, the circular example (6006-7238 on 6,407 bp), zero-length features, the non-containment rule, Dbxref first-colon split, and the 11 reserved tags.
+- **GFF3 changelog versions:** 1.12, 1.13, 1.15, 1.16, 1.19, 1.20, 1.21.
+- **Spec-example defects:** spaces instead of tabs, `.` phases on pathological CDSs, `Target=cdna0123+12+462`, `>cnda0123`.
+- **GTF2 text (via AGAT):** the CDS excludes the stop, the frame definition and "not the length of the CDS mod 3", the attribute separator, mandatory IDs, and the `#` prohibition.
+- **AGAT history:** GTF2.2 feature list; Ensembl release 75 (gene/transcript lines) and 82 (`five_prime_utr`); GENCODE vs Ensembl PAR duplication.
+- **GFF2 vs CDS stop:** the GFF2 snapshot says nothing about stop codons in CDS, so "unspecified" is right. AGAT's GFF2 table claim that start and stop are included has no support in the spec text.
+- **Ensembl docs:** "identical to GFF version 2", "General Transfer Format", "1-2 describes two bases", "Fields **must** be tab-separated".
+- **UCSC kent:** `phaseToFrame` 0→0, 1→2, 2→1, and the "same seq and strand" errAbort.
+- **GenomeTools messages:** "has no value", "was not defined", multi-feature seqid/source/type errors with a strand-only warning, the parent-before-`###` error, cycles, duplicate attributes, the uppercase-attribute error, and `##gvf-version` acceptance.
+- **tabix(1):** the gff preset (`-s 1 -b 4 -e 5 -c '#'`) and the sort recipe.
+- **Re-tested with pysam:**
+  - BGZF magic `1f 8b 08 04 … 42 43`;
+  - `.tbi` magic `TBI\1`;
+  - plain gzip and `##FASTA` files fail to index;
+  - querying ctg1:5050 returns gene, mRNA/transcript, exon and CDS.
+- **Re-tested with gffutils:** lowercase `parent=` drops exon 3.
+- **SO checks:** `5UTR` is not an SO term or synonym; `five_prime_UTR`, `biological_region`, `pseudogenic_transcript` and `ncRNA_gene` are current SO names.
+- **Reference length:** GRCh38 chr2 = 242,193,529 bp (bedtools `human.hg38.genome`).
+
+### Could not verify
+
+- **GTF2.2 page** (mblab.wustl.edu): DNS failure. web.archive.org and GitHub code search are blocked. The GTF2.2 strand set (`+`/`-` only, versus also `.`), the GTF2.2 capitalization sentence, the "globally unique" wording, and whether GTF2.2 says "must" or "should" for quotes all rest on AGAT's table, UCSC's summary or memory.
+- **SCN1A coordinates and MANE transcript:** rest.ensembl.org, the UCSC API and GENCODE were all unreachable. The values now cited come from case.md (which reports checking GENCODE v43), not from my own check.
+- **Still [from memory - verify]:**
+  - GENCODE `level` meanings;
+  - GENCODE/Ensembl `MANE_Select` and `Ensembl_canonical` tags (case.md reports both in GENCODE v43);
+  - GENCODE `UTR` in current releases;
+  - Ensembl `#!genome-build` headers and NCBI `#!` headers;
+  - `exon_number` order on the minus strand (case.md's GENCODE v43 lines are consistent with 5'→3' numbering);
+  - Ensembl `ensembl_phase` semantics;
+  - plain-gzip provider files;
+  - the NMD 50-55 nt rule;
+  - tool behaviour for STAR, featureCounts, HTSeq and VEP.
+- **When SO renamed `lnc_RNA` to `lncRNA`:** not checked. Only the current state is verified.

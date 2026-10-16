@@ -20,10 +20,18 @@ Research notes for the "Genomic File Formats" course, PAF/GFA lesson(s). Written
 **Case coordinates.**
 
 - The chr2 coordinates sit inside the GRCh38 *SCN1A* locus used by the other notes. chr2 length is 242,193,529.
-- The 368-bp deletion [166012370, 166012738) is the BEDPE lesson's `DEL_1`.
+- The 368-bp deletion [166012370, 166012738) is the BEDPE lesson's (now superseded) placeholder `DEL_1`. See the banner below.
 - The inversion [166013500, 166015900) and all population-graph details are **illustrative**.
 - The PAF lines are real minimap2 2.31 output on simulated reads. The reads were drawn from a random 40-kb sequence standing in for chr2:166,000,001-166,040,000. Target coordinates were then shifted by +166,000,000 and the target renamed `chr2` with length 242,193,529.
 - Where a tag list was trimmed for display, the text says so.
+
+**Superseded case thread (added at verification, 2026-10-16). Do not ship the case-specific items below as written.**
+
+- `case.md` is the canonical case definition. Its §10.2 replaces this note's case thread: the deletion is the 25,213-bp paternal deletion of *SCN1A* exons 17-20 (VCF POS 166,014,902), there is **no real inversion** (`BND_2` is an Alu mis-mapping artefact), and the long reads are proband-only HiFi. `case.md` §3.6, EX-09, EX-10 and §5a (CASE-F13, CASE-F14) already give the canonical PAF/GFA lines and capstone files. The 368-bp `DEL_1` and the T3 target used here are the old placeholders, which `intervals-signals.md` also marks as superseded.
+- **The current coordinates are biologically wrong for the story, not just out of date.** Checked against the GENCODE v43 MANE Select lines for ENST00000674923.1 (the same lines `case.md` §3.4 tabulates):
+  - The 368-bp deletion, 1-based chr2:166,012,371-166,012,738, is **intronic**. It lies in MANE intron 21, between exon 22 (166,012,109-166,012,282) and exon 21 (166,013,744-166,013,898). It does not remove an exon, and the "T3" target it contains is not a real exon.
+  - The "common, benign" inversion, 1-based chr2:166,013,501-166,015,900, **contains whole coding exons 21 (166,013,744-166,013,898) and 20 (166,015,607-166,015,727)**. An inversion that takes two coding exons out of *SCN1A*, a haploinsufficient Dravet gene, would be a loss-of-function allele. It could not be carried by about a third of haplotypes or by an unaffected mother. Q7's keyed answer and the §10 interpretation therefore teach a false biological conclusion with these coordinates.
+- **What stays valid.** The format mechanics are unaffected: PAF column arithmetic, piece ordering, strand flipping, `tp:A:I`, approximate vs base-level mode, every GFA/rGFA rule and the toy graphs. To reuse EX-01 to EX-06, EX-12 and Q1-Q3 and Q6-Q8, either re-coordinate them to the `case.md` deletion (dropping the inversion) or move them to an explicitly non-*SCN1A* toy locus, so that no real exon falls inside a "benign" event.
 
 ---
 
@@ -36,12 +44,12 @@ Research notes for the "Genomic File Formats" course, PAF/GFA lesson(s). Written
   - minimap2 writes PAF by default. Without `-c` the mapping is approximate (no CIGAR). With `-c` it is base-level, and the CIGAR goes in the `cg:Z:` tag (minimap2(1) [spec]).
   - minigraph writes PAF for sequence-to-sequence mapping (minigraph README [spec]).
   - `paftools.js sam2paf` and `delta2paf` (MUMmer) convert other formats to PAF (minimap2 `misc/README.md` [spec]).
-  - wfmash (the PGGB aligner) also writes PAF [from memory - verify].
+  - wfmash (the PGGB aligner) also writes PAF (`wfmash reference.fa query.fa >aln.paf`, wfmash README [verified at fact-check]).
 - **Consumers.**
   - miniasm builds assemblies from all-vs-all read overlaps. PAF was defined in the miniasm repository.
   - `paftools.js` subcommands: `call` (variants from assembly-to-reference PAF with `cs`), `liftover`, `stat`, `view`, `splice2bed` [spec: misc/README].
   - Minigraph-Cactus `cactus-graphmap-split` takes "<inputGFA> <inputPAF>" (cactus `pangenome.md` [spec]).
-  - Polishers (racon) and dot-plot viewers [from memory - verify].
+  - Polishers: racon takes "overlaps/alignments between the reads and the contigs in MHAP/PAF/SAM format" (racon README [verified at fact-check]). Dot-plot viewers [from memory - verify].
 - **Typical uses** (minimap2 README and man page presets [spec]):
   1. long-read-to-reference mapping (`map-ont`, `map-hifi`, `lr:hq`);
   2. assembly-to-reference and assembly-to-assembly alignment (`asm5`, `asm10`, `asm20`, chosen by divergence: about 0.1%, about 1%, several percent);
@@ -49,7 +57,7 @@ Research notes for the "Genomic File Formats" course, PAF/GFA lesson(s). Written
   4. all-vs-all read overlaps for assembly (`ava-ont`, `ava-pb`).
 - **Disease question.** *"Where does each long molecule from the patient come from in the reference? In how many pieces, in which orientation, and how well does each piece match?"*
   - In the trio, this turns a short-read breakpoint pair with confusing extra signals into one ordered structure.
-- **A practical caveat for the lesson.** Long-read SV callers (Sniffles, cuteSV, pbsv) read SAM/BAM, not PAF [from memory - verify]. Production pipelines therefore run `minimap2 -a`.
+- **A practical caveat for the lesson.** Long-read SV callers (Sniffles, cuteSV, pbsv) read aligned BAM, not PAF (their READMEs: `sniffles -i mapped_input.bam`, `cuteSV <sorted.bam> ...`, pbsv `.bam` to `.svsig.gz` [verified at fact-check]). Production pipelines therefore run `minimap2 -a`.
   - PAF is the quick-look, assembly-comparison and graph-building view of the *same* alignments.
   - Teach it as "the same alignment in a lighter outfit".
 
@@ -57,7 +65,7 @@ Research notes for the "Genomic File Formats" course, PAF/GFA lesson(s). Written
 
 - **What it is.** A TAB-delimited text format "to capture sequence graphs as the product of an assembly, a representation of variation in genomes, splice graphs in genes, or even overlap between reads" (GFA1.md [spec]).
 - **Producers.**
-  - Assemblers. The GFA-spec README lists Canu, miniasm, SPAdes, Unicycler, ABySS, bcalm2 and others [spec]. hifiasm and Flye also write GFA [from memory - verify].
+  - Assemblers. The GFA-spec README lists Canu, miniasm, SPAdes, Unicycler, ABySS, bcalm2 and others [spec]. hifiasm (`*.bp.p_ctg.gfa`) and Flye (`assembly_graph.gfa`) also write GFA (their READMEs/usage docs [verified at fact-check]).
   - Pangenome builders:
     - minigraph writes **rGFA**: S and L lines only, with stable coordinates. Its `sv.gfa` "doesn't have embedded paths for the input sequences" (cactus doc [spec]).
     - Minigraph-Cactus writes GFA 1.1, "as it represents haplotypes as Walks" [spec].
@@ -72,7 +80,7 @@ Research notes for the "Genomic File Formats" course, PAF/GFA lesson(s). Written
   - The HPRC draft pangenome (Liao et al. 2023, *Nature* 617:312) reported that using it for short-read analysis "reduced small variant discovery errors by 34% and increased the number of structural variants detected per haplotype by 104%" compared with GRCh38-based workflows [web-search summary of the abstract].
 - **Current human pangenome scale** [spec: hpp_pangenome_resources README]:
   - HPRC year 1 (README-v1): 47 samples assembled. The graphs used 90 haplotypes (44 samples plus GRCh38 and CHM13).
-  - Release 2: 232 samples assembled (464 assemblies). The v2.1 graphs are built as Minigraph-Cactus and minigraph graphs on GRCh38, CHM13 and GRCh37 backbones, with a stated total of 464 haplotypes.
+  - Release 2: 232 samples assembled (464 assemblies). All but one went into the graphs (HG00272 was held out for an apparent chrX misassembly), so 231 samples × 2 = 462 haplotypes, plus GRCh38 and CHM13, give the stated total of 464. The v2.1 graphs are built as Minigraph-Cactus and minigraph graphs on GRCh38, CHM13 and GRCh37 backbones.
   - The README says these "have not been fully QC'd, are not published". The release 2 preprint DOI is listed there.
 
 **Pipeline position.**
@@ -119,7 +127,7 @@ A plagiarism checker does not reprint the essays. It lists *passages*: "words 0-
 
 - **Assembly graphs vs pangenome graphs.**
   - In assembly graphs (overlap or string graphs; de Bruijn graphs with k−1 overlaps), neighbouring segments *share* bases at the junction. So L lines carry an overlap CIGAR.
-  - Pangenome graphs are "blunt": `0M` everywhere. That is why W lines are only defined for graphs without overlaps (GFA1.md [spec]).
+  - Pangenome graphs are "blunt": `0M` everywhere. W lines are "only intended for a graph without overlaps between segments" (GFA1.md [spec]), and each W step "must correspond to a 0-overlap link record".
 - **One namespace, names not numbers.** Segment and path names share one namespace (GFA1.md).
 - **Graph coordinates are unstable.**
   - In plain GFA a base's address is (segment, offset). The coordinate "is unstable -- when we split a segment in half, the coordinate is changed" (rGFA.md [spec]).
@@ -158,7 +166,7 @@ A plagiarism checker does not reprint the essays. It lists *passages*: "words 0-
 | `NM:i` | mismatches + gap bases | minimap2 writes col 11 − col 10 + `nn` [source] |
 | `AS:i`, `ms:i` | DP score; max-scoring-segment score | |
 | `nn:i` | ambiguous bases | |
-| `de:f` | gap-compressed divergence | 1 − matches/(blen − gap bases + gap opens). A 368-bp deletion counts once [source: `mm_event_identity`]. Only with `-c` |
+| `de:f` | gap-compressed divergence | 1 − matches/(blen + nn − gap bases + gap opens). A 368-bp deletion counts once [source: `mm_event_identity`]. Only with `-c` |
 | `dv:f` | approximate divergence | Written instead of `de` when there is no alignment |
 | `rl:i` | query length in repetitive seeds | |
 | `zd:i` | alignment broken by Z-drop | A hint that an SV split the read [verified: test] |
@@ -269,7 +277,7 @@ W	POP01	1	ctg7	1200	1236	>s1>s2>s3<s4>s5
 |---|---|---|
 | `SN` | Z | Name of the stable sequence the segment is derived from (e.g. `chr2`, or a sample contig) |
 | `SO` | i | Offset on that stable sequence (0-based: `gfatools gfa2bed` prints `[SO, SO+LN)` [verified: test]) |
-| `SR` | i | Rank. `0` means on the linear reference; `>0` means added later (rank 1 = the first added sample, and so on) |
+| `SR` | i | Rank. `0` means on the linear reference; `>0` means not on it. The spec says only "`>0` otherwise". That rank 1 = the first added sample, rank 2 = the second, and so on is minigraph's construction behaviour (gfatools `gfa-aug.c`: new segments get `max_rank + 1` [source]), not an rGFA rule |
 
 minigraph also writes `SR:i` on L lines. gfatools reads it as the link's rank [source].
 
@@ -293,7 +301,7 @@ L	s4	-	s5	+	0M	SR:i:1
 ```
 
 - The rank-0 segments tile chr2 [166005370, 166025738) with no gaps.
-- `s2` is exactly the short-read `DEL_1` interval. It contains the exome target T3 [166012440, 166012660).
+- `s2` is exactly the short-read `DEL_1` interval. It contains the placeholder exome target T3 [166012440, 166012660). Both are superseded (see the banner at the top): in real GRCh38 annotation this interval is in *SCN1A* intron 21 and holds no exon, while `s4` holds coding exons 20 and 21.
 - `s6` is a 311-bp insertion allele (Alu-sized, illustrative). Its stable name follows PanSN.
 - The inversion allele reuses `s4` backwards.
 
@@ -324,7 +332,7 @@ GAF is the read-to-graph alignment format and "a strict superset of the PAF form
 - stable intervals such as `>chr1:5-8>foo:8-16`;
 - or a bare stable name, which reduces the line to PAF.
 
-Columns 7-9 are the path length and the start and end on the path. Extension `.gaf`; beware that Gene Ontology annotation files also use `.gaf` [from memory - verify].
+Columns 7-9 are the path length and the start and end on the path. Extension `.gaf`; beware that Gene Ontology annotation files also use `.gaf`, and theirs begin with a `!gaf-version: 2.2` line [web-search summary of the GO GAF 2.2 page; geneontology.org was unreachable].
 
 ## 4. Coordinate system and conventions
 
@@ -373,10 +381,10 @@ The "Tool behaviour" column records what minimap2 2.31 or gfatools 0.5-r296 did 
 | PAF-M01 | `qstart < qend` and `tstart < tend`. Target coordinates are forward-strand even for `-`, so the target end is never smaller | PAF.md "start/end", "on original strand" | `...	-	chr2	242193529	166015900	166013500	...` | error |
 | PAF-M02 | `qend ≤ qlen` and `tend ≤ tlen` | half-open intervals within a sequence | `mother_lr_0012	18240	0	18412` | error |
 | PAF-M03 | Residue matches ≤ block length (col 10 ≤ col 11) | col 11 includes the matches | `2401	2391` | error |
-| PAF-M04 | Block length ≥ max(query span, target span) when no intron (`N`) is present | col 11 = M + I + D; spans are M + I and M + D. Holds in minimap2's approximate mode too [source] | col 11 = 7000 with spans 7762/8130 | error with `cg`; warning without |
+| PAF-M04 | Block length ≥ max(query span, target span) when no intron (`N`) is present **and `nn:i` is 0 or absent** | col 11 = M + I + D; spans are M + I and M + D. Holds in minimap2's approximate mode too [source]. minimap2 leaves ambiguous bases (`N`) out of col 11 (`mm_update_extra`: `blen += len - n_ambi`), so with `nn:i:k` the bound is col 11 + k ≥ max(spans) [source] | col 11 = 7000 with spans 7762/8130 | error with `cg`; warning without |
 | PAF-M05 | If `cg:Z` is present: query-consuming ops (M/I/=/X) sum to `qend−qstart`; reference-consuming ops (M/D/N/=/X) sum to `tend−tstart`; M+I+D+=+X equals col 11 when `nn:i:0` | minimap2 `cg`; paftools sam2paf arithmetic [source] | `cg:Z:2400M` on a 2400/2400 line with col 11 = 2401 | error (spans), warning (col 11) |
 | PAF-M06 | If `cs:Z` is present: `:` + `*` + `+` lengths equal the query span; `:` + `*` + `-` + `~` lengths equal the target span; the sum of `:` equals col 10 (no ambiguous bases) | minimap2 README cs grammar | `cs:Z::2400` with col 10 = 2391 | error (spans), warning (col 10) |
-| PAF-M07 | The same target name has the same col 7 on every line. Likewise col 2 for a query | one sequence, one length | `chr2	242193529` and `chr2	243199373` in one file (GRCh38 vs GRCh37 [GRCh37 length from memory - verify]) | error |
+| PAF-M07 | The same target name has the same col 7 on every line. Likewise col 2 for a query | one sequence, one length | `chr2	242193529` and `chr2	243199373` in one file (GRCh38 vs GRCh37/hg19; both lengths verified in bedtools2 `genomes/human.hg38.genome` and `human.hg19.genome`) | error |
 | PAF-M08 | Col 7 matches the reference `.fai` length (build check) | needs the FASTA | GRCh37 lengths against a GRCh38 analysis | error (pipeline) |
 | PAF-M09 | minimap2 `NM:i` = col 11 − col 10 + `nn` | [source] `write_tags` | `NM:i:3` with 2401/2391 | warning |
 
@@ -434,7 +442,7 @@ The "Tool behaviour" column records what minimap2 2.31 or gfatools 0.5-r296 did 
 | GFA-R01 | Every S line has `SN:Z`, `SO:i` and `SR:i` | "requires three additional tags on each segment" | `S	s2	*	LN:i:368	SN:Z:chr2	SR:i:0` (no SO) | error | SO defaults to 0 [source] |
 | GFA-R02 | No overlaps: every L overlap is `0M` | "disallows overlaps between segments" | `L	s1	+	s2	+	5M` | error | not checked |
 | GFA-R03 | Segments on one stable sequence do not overlap: the `[SO, SO+LN)` are disjoint | "When segments don't overlap on stable sequences ... uniquely indexed" | s2 `SO:i:166012370 LN:i:368` and s3 `SO:i:166012700` | error | not checked |
-| GFA-R04 | All segments of one stable sequence carry the same rank | gfatools check | chr2 segments with `SR:i:0` and `SR:i:1` | error | "[W] stable sequence 'chr2' associated with different ranks on segment 's2': 0 != 1" |
+| GFA-R04 | All segments of one stable sequence carry the same rank | gfatools check; not stated in rGFA.md, and stable coordinates stay interpretable | chr2 segments with `SR:i:0` and `SR:i:1` | warning | "[W] stable sequence 'chr2' associated with different ranks on segment 's2': 0 != 1" |
 | GFA-R05 | Rank-0 segments tile each reference sequence end to end | minigraph construction (rank 0 = "linear reference genome") | a gap between s1's end and s2's `SO` | convention / warning | not checked |
 
 ### 5g. GFA de facto conventions
@@ -442,7 +450,7 @@ The "Tool behaviour" column records what minimap2 2.31 or gfatools 0.5-r296 did 
 | ID | Convention | Basis | Severity |
 |---|---|---|---|
 | GFA-C01 | Order H, S, L, then P/W. Required in practice: gfatools drops W steps that name segments not yet read ("W before S" gave an empty walk [verified: test]) | gfa-io.c [source] | convention |
-| GFA-C02 | Each link is written once (not also its mirror). gfatools removes duplicates ("removed %d multiple link(s)") | gfa-base.c [source] | convention |
+| GFA-C02 | Each link is written once (not also its mirror). gfatools stores a mirror link as the same pair of arcs, so `view` prints it once. Plain `view` prints both copies of an exact duplicate L line. `gfatools view -M` (`gfa_fix_multi`) removes multi-links between the same oriented ends: "[W::gfa_fix_multi] removed 1 multiple link(s)" for a `0M`/`1M` pair, keeping one. On two *identical* L lines it aborted with "Assertion `n_wdel == i - s - 1' failed" [verified: test] | gfa-base.c, main.c [source] | convention |
 | GFA-C03 | Pangenome sequence names follow PanSN `sample#hap#contig` (P names, `SN` values) | PanSN README | convention |
 | GFA-C04 | gfatools reads only S, L and W lines. P, C, J and H are skipped without a message [verified: test], so "gfatools parsed it" ≠ "valid" | gfa-io.c | convention (pitfall) |
 | GFA-C05 | Minigraph segment IDs look like `s1`, `s2`. vg/Cactus use integers | observed | convention |
@@ -452,7 +460,7 @@ The "Tool behaviour" column records what minimap2 2.31 or gfatools 0.5-r296 did 
 | Clue | Format | Look-alikes and how to tell them apart |
 |---|---|---|
 | No header. ≥ 12 TAB columns. Col 5 is `+`/`-`. Cols 2 and 7 are lengths ≥ the coordinates beside them. Tags `tp:A:`, `cm:i:`, `s1:i:` | **PAF** (`.paf`, `.paf.gz`) | **BLAST outfmt 6**: 12 columns, but col 3 is a percent (`99.58`), there is no strand column, it is 1-based, and minus-strand hits have `sstart > send`. **SAM**: col 2 is a FLAG, col 6 a CIGAR, and there is a `@HD`/`@SQ` header. **BEDPE**: cols 1 and 4 are chromosomes, strands are in cols 9-10, and it has no lengths |
-| PAF-like, but col 6 starts with `>`/`<` or contains `:start-end` | **GAF** (`.gaf`) | PAF has a plain name in col 6. GO annotation `.gaf` starts with `!gaf-version` [from memory - verify] |
+| PAF-like, but col 6 starts with `>`/`<` | **GAF** (`.gaf`) | PAF has a plain name in col 6. A `:start-end` suffix alone is **not** a GAF cue: in GAF it only occurs after `>`/`<`, while a PAF against a `samtools faidx` slice has target names such as `chr2:166000001-166040000`. A GAF whose path is a bare stable name is indistinguishable from PAF (rGFA.md: "reduced to PAF"). GO annotation `.gaf` starts with `!gaf-version: 2.2` [web-search summary] |
 | Lines start with one letter + TAB: `S`, `L`, `P`, `W` (`H	VN:Z:1.x`) | **GFA1** (`.gfa`, `.gfa.gz`) | **GFA2**: `H	VN:Z:2.0`, `E`/`G`/`O`/`U`/`F` lines, and `S` has a numeric 3rd column (`S	s1	8	ACGT...`). **GTF/GFF**: 9 columns starting with a sequence name |
 | GFA whose S lines carry `SN:Z:`/`SO:i:`/`SR:i:`, and no P/W lines | **rGFA** (usually still `.gfa`) | Minigraph-Cactus GFA has `W` lines and usually no `SN`/`SO`/`SR` tags. The HPRC `sv.gfa` minigraph graphs do carry rGFA tags (JBrowse tutorial [web-search summary]) |
 | Binary starting `1f 8b` | gzip (`.gfa.gz`, `.paf.gz`). It may be bgzip if a `BC` extra field is present | Decompress, then apply the rows above. GBZ/xg/og are binary graph indexes, not GFA |
@@ -692,7 +700,7 @@ P	15	11+,12-,13+	4M,5M
 
 **Explanation.**
 
-- The P line is valid as written, but it now fails GFA-M07, because the 12-→13+ link was lost with line 6. A good validator reports the knock-on effect.
+- Line 8 (the P line) is well-formed, but because line 6 is not a usable link, no valid link supports its `12-`→`13+` step, so a validator also reports GFA-M07 on line 8. That is a knock-on of line 6, not a fourth independent error. **Answer-key rule:** the three required clicks are lines 3, 6 and 7. A click on line 8 must not be marked wrong; reveal it as "knock-on of line 6". Otherwise the title "Three broken lines" contradicts the validator.
 - gfatools never even reads P lines.
 
 ### EX-10 · fix-it (GFA overlap validator): "Make the overlaps true"
@@ -709,9 +717,9 @@ L	12	-	13	+	5M
 P	14	11+,12-,13+	5M,5M
 ```
 
-**Validator.** GFA-M06 fires on line 5: suffix `ACCTT` vs prefix of 12- (`CCTTGA`) = `CCTTG`, 3 of 5 columns differ. GFA-M08 fires on line 7. gfatools accepts the file silently [verified: test].
+**Validator.** Only GFA-M06 fires at first, on line 5: suffix `ACCTT` vs prefix of 12- (`CCTTGA`) = `CCTTG`, 3 of 5 columns differ. GFA-M08 does **not** fire yet, because the path's `5M,5M` equals the two link overlaps (5M, 5M). gfatools accepts the file silently [verified: test].
 
-**Fix.** Change `5M` to `4M` on line 5, and change the path overlaps to `4M,5M`.
+**Fix.** Change `5M` to `4M` on line 5. GFA-M06 clears, and GFA-M08 now fires on line 7 (path `5M` vs link `4M`). Then change the path overlaps to `4M,5M`, and all messages clear. The live validator should show this two-step sequence; it is the point of the exercise.
 
 **Explanation.**
 
@@ -808,7 +816,7 @@ P	14	11+,12-,13+	5M,5M
 - (d) W steps must use 0-overlap links (GFA-M09). These links are 4M and 5M.
 - (e) Names may not contain `+,` (GFA-S04). It would make `13+,x+` ambiguous in P lines.
 
-**Q5 (mcq).** `W	POP01	1	ctg7	1200	1230	>s1>s2>s3<s4>s5` is added to the §3.6 graph (segment lengths 8, 8, 5, 9, 6). What should a validator report?
+**Q5 (mcq).** In the §3.6 graph (segment lengths 8, 8, 5, 9, 6), POP01's W line is *replaced* by `W	POP01	1	ctg7	1200	1230	>s1>s2>s3<s4>s5`. What should a validator report? (Use "replaced", not "added": adding it next to the existing `ctg7	1200	1236` line would also trip GFA-M11, the same-(SampleId, HapIndex, SeqId) overlap warning, and make (b) incomplete.)
 
 - (a) Nothing: W coordinates are free text.
 - (b) A warning: SeqEnd − SeqStart = 30, but the walk spells 36 bases. ✔
@@ -835,7 +843,9 @@ P	14	11+,12-,13+	5M,5M
 - (c) Correct.
 - (d) Ranks above 0 are how rGFA adds non-reference sequence.
 
-**Q7 (mcq, case reasoning).** In the HPRC-style graph, about a third of haplotypes walk `<s4` (illustrative). No haplotype uses an edge that skips `s2`. Both parents' long reads follow the reference across s2. The mother carries `<s4`. What is the best interpretation?
+> **Ship-blocker (verification).** With the current coordinates, `s4` (chr2:166,013,501-166,015,900) contains *SCN1A* MANE coding exons 20 and 21. An allele that inverts them is a loss-of-function allele in a haploinsufficient gene, so it cannot be "a common inherited polymorphism" carried by about a third of haplotypes and by an unaffected mother. The keyed answer (b) is false biology for these coordinates. Keep the reasoning pattern (frequency plus an unaffected carrier argues against a severe dominant allele) only after re-coordinating the case to `case.md`, or after moving the inversion to non-coding sequence on a non-*SCN1A* toy locus. The deletion of `s2` is also intronic in reality (see the banner at the top).
+
+**Q7 (mcq, case reasoning).** In the HPRC-style graph's haplotype data (the panel's W lines or `minigraph --call` output; a bare rGFA holds no haplotypes, §7 item 10), about a third of haplotypes walk `<s4` (illustrative). No haplotype uses an edge that skips `s2`. Both parents' long reads follow the reference across s2. The mother carries `<s4`. What is the best interpretation?
 
 - (a) The inversion is the likely cause because it is a structural variant near *SCN1A*.
 - (b) The deletion of s2 is a rare de novo event on the maternally inherited haplotype. The inversion is a common inherited polymorphism. ✔
@@ -884,10 +894,10 @@ P	14	11+,12-,13+	5M,5M
   - the graph drawer (EX-08 at toy scale);
   - stable coordinates (EX-12).
   - Finding 1: the inversion is a common bubble (`<s4`).
-  - Finding 2: no haplotype skips `s2`, the segment holding exon target T3. The proband's walk needs a missing edge.
-  - Interpretation (Q7): the deletion is rare and de novo and removes an *SCN1A* exon. The inversion is benign background.
-  - Forward links: the VCF lesson records `SVTYPE=DEL`, END and parental genotypes; the GTF lesson already named the exon.
-- **Capstone planted files.**
+  - Finding 2: no haplotype skips `s2`, the segment holding the placeholder target T3. The proband's walk needs a missing edge.
+  - Interpretation (Q7) as originally drafted: "the deletion is rare and de novo and removes an *SCN1A* exon; the inversion is benign background". **This is false with these coordinates** (verification): the 368-bp deletion is in MANE intron 21 and removes no exon, and the 2.4-kb "benign" inversion contains coding exons 20 and 21. The canonical story (`case.md` §3.3, stage D) is a 25,213-bp paternal deletion of exons 17-20 with no inversion. Use that.
+  - Forward links: the VCF lesson records `SVTYPE=DEL`, END and parental genotypes; the GTF lesson already named the exons (17-20 in `case.md`).
+- **Capstone planted files.** Superseded by `case.md` §5a, whose canonical folder has the PAF and GFA defects as CASE-F13 (`longread/P042-proband.hifi.txt`, col 10 > col 11, PAF-M03) and CASE-F14 (`graph/P042_locus.gfa`, missing `L	s1	+	s6	+	0M`, GFA-M09). The list below is a pool of extra PAF/GFA defect ideas, not the capstone folder.
   1. `proband.lr.paf`: valid, including one `--paf-no-hit` line (PAF-C01). It should be flagged as unmapped, not invalid.
   2. `proband.lr.fixed.paf`: a colleague's "corrected" `-` lines (PAF-M01, PAF-M03; EX-05).
   3. `mother.lr.paf`: one PAF-M02 line (EX-06).
@@ -952,7 +962,7 @@ P	14	11+,12-,13+	5M,5M
 ### Empirical checks (scratch only, not shipped)
 
 - **minimap2 2.31-r1302**, compiled from source. Runs on simulated reads from a random 40-kb sequence:
-  - a proband allele with a 368-bp deletion plus a 2.4-kb inversion (presets `lr:hq`, `map-hifi`, `map-ont`, which gave identical piece coordinates);
+  - a proband allele with a 368-bp deletion plus a 2.4-kb inversion (presets `lr:hq`, `map-hifi`, `map-ont`, which gave identical piece coordinates in this run; in the verifier's independent re-run on another random sequence, `map-hifi` put the inversion piece's ends 3 bp from the other two presets' ends, so do not promise identical output);
   - its reverse complement;
   - a mother allele with the inversion only;
   - a reference allele;
@@ -967,8 +977,49 @@ P	14	11+,12-,13+	5M,5M
 - **github.com web pages and the GitHub API** returned "GitHub access to this repository is not enabled". So the commit dates or hashes for `PAF.md`, `GFA1.md` and `rGFA.md` could not be recorded beyond the GFA1 front-matter date.
 - **Not opened** (only search summaries, or not attempted): nature.com (Liao et al.), humanpangenome.org, jbrowse.org tutorials, the lh3 GFA blog posts (2014), Bandage documentation, and the Gene Ontology GAF specification. Claims depending on them are marked [web-search summary] or [from memory - verify].
 - **From memory, to verify before shipping:**
-  - that long-read SV callers take BAM rather than PAF;
-  - that racon and dot-plot tools consume PAF;
-  - that hifiasm and Flye write GFA, and that wfmash writes PAF;
-  - the GRCh37 chr2 length 243,199,373;
-  - the GO `.gaf` extension clash.
+  - that dot-plot tools consume PAF.
+  - (Resolved at verification from the tools' READMEs on raw.githubusercontent.com: Sniffles, cuteSV and pbsv take BAM; racon takes PAF; hifiasm and Flye write GFA; wfmash writes PAF.)
+  - (Resolved at verification: the GRCh37 chr2 length 243,199,373 is confirmed by bedtools2 `genomes/human.hg19.genome`. The GO `!gaf-version: 2.2` header is confirmed by web-search summary only.)
+
+## Verification log
+
+Adversarial fact-check, 2026-10-16. Primary sources were fetched again on raw.githubusercontent.com: `PAF.md`, `minimap2.1` (2.31-r1302), minimap2 `README.md`, `misc/README.md`, `format.c`, `hit.c`, `align.c`, `main.c`, `GFA1.md` (2022-06-07), `GFA2.md`, `rGFA.md`, the gfatools sources, the minigraph README, the cactus `pangenome.md`, the HPRC `README.md` and `README-v1.md`, the PanSN README, `tabix.1` (htslib-1.24), and the bedtools2 genome files. minimap2 (commit 3c28777, 2.31-r1302) and gfatools (commit 39c54d5, 0.5-r296) were rebuilt from fresh clones. The case simulation was re-run independently on a new random 40-kb sequence: same three-piece structure, piece output order 3, 1, 2, `tp:A:I` with MAPQ 60 and `cm/s1/s2` = 0, a `368D` exactly at [12370, 12738), one approximate-mode line, mirrored query coordinates for the reverse-complemented read, an `ava-ont` line with `tp:A:S` and MAPQ 0, and the `--paf-no-hit` line format. Every gfatools message quoted in §5 and EX-09 was reproduced verbatim, as were the `bubble` segfault on `*` sequences and the 3-path inversion site (2400-2711).
+
+### Corrections made
+
+| # | Claim (before) | Correction | Source |
+|---|---|---|---|
+| 1 | The case thread (the 368-bp `DEL_1` removes an *SCN1A* exon; the 2.4-kb inversion is common and benign; maternal origin; parental long reads) is "concrete and consistent" | Superseded by `case.md` §10.2 (25,213-bp paternal deletion of exons 17-20, no inversion). It is also biologically false with these coordinates. The deletion, chr2:166,012,371-166,012,738, is in MANE intron 21 and removes no exon. The "benign" inversion, chr2:166,013,501-166,015,900, contains coding exons 21 (166,013,744-166,013,898) and 20 (166,015,607-166,015,727), so it would be an LoF allele in a haploinsufficient gene and cannot be at about 33% frequency. Added a top banner, a Q7 ship-blocker, and fixes in §3.7 and §10 | `case.md` §3.4 and §10.2; GENCODE v43 MANE exon lines for ENST00000674923.1 (scratch copy used by `case.md`); `intervals-signals.md` superseded banner |
+| 2 | EX-10: "GFA-M08 fires on line 7" in the broken file | False. P `5M,5M` equals the link overlaps `5M`/`5M`, so only GFA-M06 fires at first. GFA-M08 fires only after line 5 becomes `4M`, until P becomes `4M,5M` | GFA1.md P section; arithmetic; gfatools run (accepts silently) |
+| 3 | EX-09: "Three broken lines", while the explanation says line 8 also fails GFA-M07 | Answer-key ambiguity. The key now requires lines 3, 6 and 7, and says a click on line 8 must be revealed as a knock-on, not marked wrong | GFA1.md Terminology (path steps "supported by a link") |
+| 4 | Q5: the bad W line "is added to" the §3.6 graph; keyed answer: one length warning | Adding it would also overlap the existing `POP01 1 ctg7 1200-1236` line (GFA-M11), so the keyed answer would be incomplete. The stem now says "replaced" | GFA1.md W section ("should have no overlaps") |
+| 5 | PAF-M04: block length ≥ max(spans) whenever there is no `N` op (an error with `cg`) | minimap2 leaves ambiguous bases out of col 11 (`blen += len - n_ambi`), so real output with `nn:i:k > 0` can violate the bound. Added the `nn` qualifier (col 11 + nn ≥ max spans) | minimap2 `align.c` `mm_update_extra`; `format.c` `write_tags` |
+| 6 | Recognition: GAF if col 6 "starts with `>`/`<` **or contains `:start-end`**" | A `:start-end` suffix alone is not a GAF cue: PAF against a `samtools faidx` slice has target names like `chr2:166000001-166040000`. In GAF, stable intervals always follow `>`/`<`, and a bare stable-name GAF line is PAF | rGFA.md GAF grammar (`<path> <- <stableId> \| <orientIntv>+`) |
+| 7 | GFA-C02: "gfatools removes duplicates" | Plain `view` keeps an exact duplicate L line. Only `view -M` (`gfa_fix_multi`) removes multi-links ("removed 1 multiple link(s)" for a 0M/1M pair). On two identical L lines `-M` aborted with an assertion failure. A mirror-written link is stored once | gfatools `main.c`, `gfa-base.c`; test runs |
+| 8 | GFA-R04 severity "error" | Changed to "warning": not in rGFA.md (a gfatools check only), and stable coordinates stay interpretable. That fits the note's own severity scheme | rGFA.md; gfatools `gfa-io.c` |
+| 9 | §2: W lines are "only defined for" graphs without overlaps ("that is why") | The spec says "only intended for a graph without overlaps", and W steps "must correspond to a 0-overlap link record". Wording fixed | GFA1.md W section and Terminology |
+| 10 | §3.2 `de` formula omits ambiguous bases | Now 1 − matches/(blen + nn − gap bases + gap opens), consistent with §11 | minimap2 `align.c` `mm_event_identity` |
+| 11 | HPRC release 2: "232 samples ... 464 haplotypes" | Added that one sample (HG00272) was held out: 231 × 2 + GRCh38 + CHM13 = 464 | HPRC `README.md` |
+| 12 | rGFA `SR`: "rank 1 = the first added sample, and so on" presented as part of the format | rGFA.md says only "`>0` otherwise". The incremental rank is minigraph/gfatools construction behaviour (`max_rank + 1`). Relabelled | rGFA.md; gfatools `gfa-aug.c` |
+| 13 | GRCh37 chr2 length 243,199,373 [from memory] | Confirmed | bedtools2 `genomes/human.hg19.genome` (and hg38: 242,193,529) |
+| 14 | wfmash writes PAF; racon reads PAF; Sniffles/cuteSV/pbsv read BAM; hifiasm/Flye write GFA [all from memory] | All confirmed; tags updated | the tools' READMEs/usage docs on raw.githubusercontent.com |
+| 15 | GO `.gaf` starts with `!gaf-version` [from memory] | `!gaf-version: 2.2`, tagged [web-search summary] (geneontology.org did not resolve) | web-search summary of the GO GAF 2.2 page |
+| 16 | Capstone planted files in §10 shown as the capstone folder | Marked as superseded by `case.md` §5a (CASE-F13 PAF-M03, CASE-F14 GFA-M09). Kept as an idea pool | `case.md` §5a |
+| 17 | Sources: presets `lr:hq`/`map-hifi`/`map-ont` "gave identical piece coordinates" | In the independent re-run, `map-hifi` put the inversion piece's ends 3 bp from the other two presets' ends. A caveat was added; do not promise identical output | test run |
+
+### Checked and found correct (no change)
+
+- PAF: the 12 columns and their types; 0-based half-open on each sequence's forward strand; col 10/11 semantics, including approximate mode (`mm_cal_fuzzy_len`); MAPQ 0-255 with 255 missing; the `tp` types (supplementary pieces are `P`); `NM` = col 11 − col 10 + nn; `s2` written only on primary lines; tag order; the undocumented `--qstrand` (not in the man page; `format.c` flips the target coordinates); `--paf-no-hit` format; the `cs` ops; the asm5/asm10/asm20 divergence wording; `paftools.js` commands and the 50 kb/10 kb thresholds; tabix `-s6 -b8 -e9 -0` on a target-sorted bgzipped PAF (re-tested with pysam 0.24.1).
+- All PAF arithmetic in §3.3, EX-01 to EX-06, Q1 to Q3 and the father line: the CIGAR/cs sums, NM, `de` = 0.0042, the spans, 95.1%, the mirrored query intervals, the PAF-M02 line, and the BLAST-tabular look-alike (pident 2391/2401 = 99.58, 1-based, `sstart > send`).
+- GFA1: line types and versions; the name regex (`*`/`=` excluded as first character; `<`/`>` excluded from W walks); the `+,`/`-,` rule; the tag grammar and types; the reserved tags; C `Pos`; P overlaps n − 1; J `Distance`/`SC`; W fields, HapIndex rule and BED-like coordinates; the spec example (overlaps 4M/5M/3M and the path `ACCTTGATT`); the §3.6 toy (36 bp, both walk spellings, 6 links = 12 arcs); EX-08; EX-11 (`AATCAAGGT`, the mirrors); Q4 keys (b), (d), (e); EX-12 stable coordinates and the GAF stable path.
+- GFA2: the S length caveat, `$` positions ("It is an error to do otherwise"), the blunt edge `x$ x$ 0 0`, space-separated O/U members, unknown letters "can be ignored". GAF: 12 columns and the path grammar.
+- gfatools 0.5-r296 behaviour quoted in §5d-§5g and §7 item 12, every message verbatim; `SO` defaulting to 0 when missing; L-line `SR` read as the link rank; `bubble` columns 5 and 6 match the minigraph README.
+- Ecosystem: Minigraph-Cactus GFA 1.1 with W lines; `vg convert -gfW`/`-gf`; `sv.gfa` has no embedded paths; `cactus-graphmap-split <inputGFA> <inputPAF>`; PanSN `sample#hap#contig` and PGGB P lines; HPRC v1 (47 samples; 44 used + 2 references = 90 haplotypes); Liao et al. 2023 *Nature* 617:312-324 with 34%/104% (web-search summary of the abstract).
+
+### Could not verify
+
+- The Liao et al. abstract and the GO GAF 2.2 spec page themselves (nature.com and geneontology.org do not resolve here; web-search summaries only).
+- The JBrowse claim that HPRC `sv.gfa` graphs carry rGFA tags. It is consistent with the cactus doc ("Split ... using the rGFA tags in the GFA"), but that doc page was not opened.
+- That dot-plot viewers consume PAF (from memory).
+- The researcher's exact PAF numbers (they come from their own random sequence). Structure and arithmetic were reproduced, not the specific values.
+- The clinical figures behind the case (*SCN1A* haploinsufficiency, LoF intolerance). These rest on `case.md`'s sources and general knowledge [from memory - verify pLI/gnomAD constraint if quoted].

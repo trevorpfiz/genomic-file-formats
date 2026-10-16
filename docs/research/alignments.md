@@ -11,6 +11,11 @@ Research notes for the "Genomic File Formats" course, covering the alignment les
 
 **Tabs.** In every code block below, the separators in SAM lines, header lines and `.crai` lines are single literal TAB characters. Hex dumps use single spaces. Prose writes a tab as "TAB".
 
+**Superseded case coordinates (added at verification, 2026-10-16).** `case.md` is the canonical case definition. Its §10.2 replaces this note's target T3 (chr2:166,012,441-166,012,660) and the 368-bp `DEL_1` (deleted bases 166,012,371-166,012,738) with exon-named targets and a de novo 25,213-bp deletion of *SCN1A* MANE exons 17-20 (VCF POS 166,014,902, SVLEN 25213; canonical split read `96M54S` at 166,014,807 in `case.md` §3.6).
+- **T3 is intronic, not an exon.** No GENCODE v27 *SCN1A* exon and no Twist exome capture target overlaps 166,012,441-166,012,660 or the 368-bp deletion. The nearest exons are 166,012,109-166,012,282 (MANE exon 22) and 166,013,744-166,013,898 (MANE exon 21) [verified: Broad `GRCh38_gencode.v27.refFlat.txt` and `bge_TwistAllianceClinicalResearchExome_Covered_Targets_hg38.interval_list`]. So the placeholder deletion removes no exon, and a real exome would barely sample it.
+- **Read length.** The canonical exome is 2×150. The placeholder snippets here use 100-bp reads.
+- **What still holds.** The case snippets below (EX-04 row 4, EX-08, EX-09, EX-10, EX-13, Q3) are internally consistent and use real GRCh38 bases: EX-08 passes `samtools calmd -e` with every aligned base matching [re-verified]. Their format mechanics and arithmetic can be taught as they are, but swap in the `case.md` coordinates before shipping.
+
 ---
 
 ## 1. Purpose and place in the pipeline
@@ -157,7 +162,7 @@ Tags starting with `X`, `Y`, `Z`, or containing a lowercase letter, are reserved
 | `AS` | i | Aligner-specific alignment score | Not comparable across aligners |
 | `RG` | Z | Read group; must match an `@RG ID` if `@RG` lines exist | Sample identity (`@RG SM`) for joint genotyping |
 | `SA` | Z | `(rname,pos,strand,CIGAR,mapQ,NM;)+`. Other parts of a chimeric alignment. `pos` is 1-based; `strand` is `+`/`−` as in 0x10. "Conventionally, at a supplementary line, the first element points to the primary line" | Split reads become breakpoints |
-| `MC` | Z | CIGAR of the mate/next segment | Mate end without reading the mate; `samtools fixmate -m` and `markdup` use it |
+| `MC` | Z | CIGAR of the mate/next segment | Mate end without reading the mate. `samtools fixmate` writes it (with or without `-m`; `-m` adds the `ms` tag), and `markdup` relies on both `MC` and `ms` [verified: samtools-fixmate.1, samtools-markdup.1] |
 | `MQ` | i | MAPQ of the mate | Filtering discordant pairs |
 | `XA` | Z | **bwa-specific** (X = local): alternative hits `(chr,±pos,CIGAR,NM;)*`. bwa source writes `chr,`, then `+`/`−` and the 1-based pos, then CIGAR, then NM [verified: `bwamem_extra.c`] | Repeat/paralog awareness; not portable |
 | `CG` | B,I | BAM only: real CIGAR when it has > 65,535 operations | Ultra-long reads |
@@ -242,7 +247,7 @@ Two more lines worth reading closely:
 | cigar | uint32[] = `len<<4 \| op` | CIGAR, ops `MIDNSHP=X` → 0-8 |
 | seq | 4-bit codes, 2 per byte, `=ACMGRSVTWYHKDBN` → 0-15 | SEQ (case is lost; other chars → N) |
 | qual | uint8[] raw Phred (no +33); all 0xFF if absent | QUAL |
-| aux | tag(2) type(1) value… | optional fields; integers stored as the smallest of `cCsSiI` |
+| aux | tag(2) type(1) value… | optional fields; integers stored as any of `cCsSiI`, "typically the smallest that suffices" (an implementation choice, §4.2.4) |
 
 **EOF marker (§4.1.2).** The file should end with this exact 28-byte empty block:
 
@@ -264,8 +269,8 @@ Two more lines worth reading closely:
 - **Where records go.** Records are split into "data series" (BF = BAM flags, AP = positions, RL = read length, RN = names, QS = qualities, BS = base substitutions, …), each compressed with the codec that suits it. This is why CRAM beats BAM even without a reference.
 - **Reference-based bases (§10.6).** A mapped read stores only "read features" relative to the reference: substitution `X` (as a code into a 5×4 substitution matrix), insertion `I`, deletion `D`, soft clip `S`, hard clip `H`, ref skip `N`, and so on. Matching bases are not stored at all.
 - **Reference fingerprints.** Each slice header stores the MD5 of the reference bases it spans (§8.5). The SAM header in a CRAM **must** carry `@SQ M5` unless the reference is embedded (§8.3, §11). samtools added `M5:` and `UR:` to `@SQ` automatically when writing CRAM [verified: test].
-- **Embedded reference (`embed_ref=1` or `2`).** A slice may carry the reference bases it covers. The file then decodes without any external FASTA (§8.5; htslib reference docs: "around 700MB larger" for a human genome).
-- **Lossy options.** CRAM "does not impose any rules about what data should or should not be preserved" (§1). Quality scores are optional per record (CF bit 0x1 "quality scores stored as array"). Read names are optional per container (preservation map `RN`; htslib `lossy_names`). Quality binning happens before encoding.
+- **Embedded reference (`embed_ref=1` or `2`).** A slice may carry the reference bases it covers. The file then decodes without any external FASTA (§8.5). `embed_ref=1` embeds the real reference; `embed_ref=2` embeds a consensus built from the reads, and htslib switches to it automatically when it cannot find the external reference while encoding. The cost is about 2 bits per covered base, "around 700MB larger" for a human genome (htslib reference docs) [verified: samtools.1, reference_seqs.md].
+- **Lossy options.** CRAM "does not impose any rules about what data should or should not be preserved" (§1). Qualities are flexible per record: CF bit 0x1 marks a record whose qualities are stored as a full array; without it, only scores attached to read features (if any) are kept. Read names are optional per container (preservation map `RN`; htslib `lossy_names`). Quality binning happens before encoding.
 - **EOF container (§9).** It is required in v3. It is exactly 38 bytes; its "alignment start" field is 4542278 = 0x454F46, ASCII "EOF":
 
 ```
@@ -280,9 +285,9 @@ Two more lines worth reading closely:
   5. slice offset relative to the end of the container header (the "landmark");
   6. slice size.
 
-  The spec example file gave the single line `0	7	39	433	234	373` [verified: test].
+  The spec example file gave the single line `0	7	39	433	234	373` [verified: test]. Column 4 depends on the length of the header text (for example the `@PG CL` command line), so a re-run gives different offsets: at verification the same six records gave `0	7	39	421	234	373`.
 
-**Size, measured by others.** From the htslib benchmark page, 10 M coordinate-sorted alignments per dataset (sizes in MB):
+**Size, measured by others.** From the htslib benchmark page (sizes in MB). The two Illumina sets are 10 M coordinate-sorted alignments each. The page does not give a record count for the Revio set, which was aligned to the T2T HG002 assembly rather than GRCh38:
 
 | Dataset | BAM | CRAM 3.0 | CRAM 3.1 |
 |---|---|---|---|
@@ -319,7 +324,7 @@ The lesson: reference compression nearly erases the cost of the bases (4.2 vs 28
 **TLEN (§1.4 item 9)**
 
 - For primary reads with both segments on the same reference, |TLEN| = rightmost mapped end − leftmost mapped start + 1. Soft clips are excluded.
-- It is positive on the leftmost segment and negative on the rightmost. If both segments start at the same coordinate the choice is arbitrary, but the signs must differ.
+- It is positive on the leftmost segment and negative on the rightmost. If the segments cover the same coordinates, which one counts as leftmost is arbitrary, but the two ends "must still have differing signs".
 - It is 0 for single-segment templates, for different chromosomes, or when a segment is unmapped.
 - The exact definition is "implementation-defined". Early specs measured 5′ to 5′. bwa still does: its source computes TLEN from each read's 5′ end (`p->pos` for forward reads, the end for reverse reads) [verified: `bwamem.c`].
 
@@ -363,7 +368,7 @@ The lesson: reference compression nearly erases the cost of the bases (4.2 vs 28
 | SAM-S03 | At most one `@HD`, and it is the first line; `VN` required, `^[0-9]+\.[0-9]+$` | v1.6 §1.3 | `@SQ` line before `@HD` | error | silently moves `@HD` to the top |
 | SAM-S04 | `@SQ` has `SN` and `LN`; `LN` in [1, 2^31−1]; `SN` values distinct; `SN` matches the rname regex | v1.6 §1.3, §1.2.1 | `@SQ	SN:ref` / `LN:0` / two `SN:ref` | error | "invalid or no LN: tag"; "Duplicate entry "ref"" |
 | SAM-S05 | `@RG` and `@PG` each have a unique `ID`; `@PG PP` names an existing `@PG ID` | v1.6 §1.3 | `@RG	SM:kid` | error | "Header includes @RG line with no ID: tag" |
-| SAM-S06 | No tag repeated within one header line | v1.6 §1.3 | `@SQ	SN:a	LN:5	LN:6` | error | not tested |
+| SAM-S06 | No tag repeated within one header line | v1.6 §1.3 | `@SQ	SN:a	LN:5	LN:6` | error | Differing values fail: "Header includes @SQ line "a" with multiple LN: tag with different values." (htslib ≥ 1.22). An identical repeat (`LN:5	LN:5`) is **accepted silently** [verified at fact-check] |
 | SAM-S07 | Each alignment line has ≥ 11 TAB-separated fields | v1.6 §1.4 | 10 fields; or fields separated by spaces | error | "Parse error" |
 | SAM-S08 | QNAME matches `[!-?A-~]{1,254}`: printable, no `@`, no space, ≤ 254 chars | v1.6 §1.2.1, §1.4 | 255-char name; `r 1`; `@r1` at line start | error | 255 chars: "query name too long". `r 1`: **accepted**. `@r1…`: parsed as a header line, fails |
 | SAM-S09 | FLAG [0, 65535]; POS and PNEXT [0, 2^31−1]; MAPQ [0, 255]; TLEN an integer in [−2^31+1, 2^31−1] | v1.6 §1.4 | MAPQ `256`; FLAG `65536`; TLEN `1.5` | error | "number outside allowed range"; "Parse error" |
@@ -377,7 +382,7 @@ The lesson: reference compression nearly erases the cost of the bases (4.2 vs 28
 | SAM-S17 | A TAG appears at most once per line | v1.6 §1.5 | `NM:i:0	NM:i:1` | error | **accepted, both written** |
 | SAM-S18 | Exactly one primary line (`FLAG & 0x900 == 0`) per read | v1.6 §1.4 item 2 | two `r003` lines, both FLAG 0 | error | not checked |
 | SAM-S19 | Reserved FLAG bits (> 0x800) not set | v1.6 §1.4 item 2 | FLAG `4096` | warning | not checked |
-| SAM-S20 | Text is 7-bit ASCII (UTF-8 only in named fields such as `@CO`, `DS`, `CL`); no byte-order mark | v1.6 §1 | file starting with `EF BB BF` | error | not tested. CRLF line ends were accepted |
+| SAM-S20 | Text is 7-bit ASCII (UTF-8 only in named fields such as `@CO`, `DS`, `CL`); no byte-order mark | v1.6 §1 (BOM: footnote, "must not") | file starting with `EF BB BF` | error | BOM: "fail to read the header" [verified at fact-check]. CRLF line ends were accepted (the spec says implementations "may wish to support" CR LF) |
 
 ### 5b. SAM semantic and consistency rules
 
@@ -385,12 +390,12 @@ The lesson: reference compression nearly erases the cost of the bases (4.2 vs 28
 |---|---|---|---|---|---|
 | SAM-M01 | RNAME (if not `*`) is an `@SQ SN` | v1.6 §1.4 item 3 | `chr1` with only `@SQ	SN:ref` | error | warning "unrecognized reference name "chr1"; treated as unmapped". With no `@SQ` at all: error "no SQ lines present in the header" |
 | SAM-M02 | RNEXT (if not `*` or `=`) is an `@SQ SN` | v1.6 §1.4 item 7 | RNEXT `chrZ` | error | warning, "treated as unmapped" |
-| SAM-M03 | A mapped record (0x4 unset) has RNAME ≠ `*`, POS ≥ 1 and CIGAR ≠ `*` | v1.6 §1.4 items 3-6 | FLAG 16 with POS 0; FLAG 0 with CIGAR `*` | error | warning; record converted to unmapped |
+| SAM-M03 | A mapped record (0x4 unset) has RNAME ≠ `*`, POS ≥ 1 and CIGAR ≠ `*` | v1.6 §1.4 items 3-6 (implied by the field definitions; there is no single explicit MUST) | FLAG 16 with POS 0; FLAG 0 with CIGAR `*` | error (cannot be placed) | warning ("mapped query cannot have zero coordinate" / "mapped query must have a CIGAR"); record converted to unmapped |
 | SAM-M04 | Only 0x4 decides "unmapped". A validator must *not* flag RNAME/POS/CIGAR/MAPQ/0x2/0x100/0x800 on a 0x4 record | v1.6 §1.4 item 2 | (validator behaviour) | — | n/a |
-| SAM-M05 | POS ≤ `@SQ LN` of RNAME | v1.6 §1.4 (POS on that reference); htsjdk `INVALID_ALIGNMENT_START` | `@SQ LN:45`, POS `100` | error | **accepted**; `samtools index` also accepted it |
+| SAM-M05 | POS ≤ `@SQ LN` of RNAME | No explicit MUST in v1.6 (POS is a position on RNAME; §2 item 4.3 says an overrunning read "should be unmapped"; CRAMv3 §11 item 3 even treats out-of-range reference bases as `N`); htsjdk `INVALID_ALIGNMENT_START` | `@SQ LN:45`, POS `100` | error (course choice, following htsjdk) | **accepted**; `samtools index` also accepted it |
 | SAM-M06 | Alignment end (POS + refspan − 1) ≤ LN unless `TP:circular`; otherwise the read "should be unmapped" | v1.6 §2 item 4.3, §2 item 7 | POS 44 with `5M` on LN 45 | warning | accepted |
 | SAM-M07 | `SO:coordinate` means records are ordered by `@SQ` order, then POS, with `*` last | v1.6 §1.3 (`@HD SO`) | POS 20 followed by POS 7 | error | `view` accepts. `index` fails: "Unsorted positions on sequence #1: 20 followed by 7" |
-| SAM-M08 | `RG:Z:x` matches an `@RG ID` when `@RG` lines exist (also `LB`, `PU`) | SAMtags §1.2 ("must match") | `RG:Z:nope` | error | **accepted silently** |
+| SAM-M08 | `RG:Z:x` matches an `@RG ID` when `@RG` lines exist (also `LB`, `PU`). With no `@RG` lines at all, an `RG` tag breaks only a should | SAMtags §1.2 ("If @RG headers are present … must match"); v1.6 §2 item 1.3 (should) | `RG:Z:nope` with `@RG	ID:rg1` present | error (with `@RG` lines); warning (no `@RG` lines) | **accepted silently** in both cases |
 | SAM-M09 | `PG:Z:x` matches an `@PG ID` | SAMtags §1.2 | `PG:Z:bwa2` with only `@PG ID:bwa` | warning | not checked |
 | SAM-M10 | Mates agree: RNEXT/PNEXT = mate's primary RNAME/POS; 0x20 = mate's 0x10; 0x8 = mate's 0x4; `MC` = mate's CIGAR | v1.6 §1.4 items 2, 7, 8; SAMtags `MC`; htsjdk `MISMATCH_FLAG_MATE_*`, `MISMATCH_MATE_CIGAR_STRING` | R1 says PNEXT 37 but R2's POS is 38 | error | not checked |
 | SAM-M11 | TLEN signs differ between the two ends; TLEN = 0 for unpaired, unmapped or inter-chromosomal reads | v1.6 §1.4 item 9 | both mates `+39` | warning (definition is implementation-defined) | not checked |
@@ -398,7 +403,7 @@ The lesson: reference compression nearly erases the cost of the bases (4.2 vs 28
 | SAM-M13 | `SA` matches `(rname,pos,strand,CIGAR,mapQ,NM;)+`; each entry describes another record of the same read | SAMtags §1.1 | `SA:Z:garbage`; `SA` pointing at a POS where no piece exists | error (grammar) / warning (cross-record) | **`SA:Z:garbage` accepted** |
 | SAM-M14 | `MD` matches its regex and agrees with CIGAR, SEQ and the reference; `NM` = mismatches + I + D bases | SAMtags §1.1 | `MD:Z:xyz`; `NM:i:0` on `8M2I4M1D3M` | error (MD grammar) / warning (values: "historically ill-defined") | `MD:Z:xyz` accepted. `samtools calmd -e` recomputes both |
 | SAM-M15 | If 0x1 is unset, ignore 0x2/0x8/0x20/0x40/0x80. A validator may warn when they are set | v1.6 §1.4 item 2; htsjdk `INVALID_FLAG_PROPER_PAIR` (WARNING) | FLAG 2 (proper pair, unpaired) | warning | not checked |
-| SAM-M16 | `CG` tag must not appear in SAM or CRAM (BAM-only workaround) | SAMtags `CG` | `CG:B:I,…` in a `.sam` | warning | not tested |
+| SAM-M16 | `CG` tag is not expected in SAM or CRAM (BAM-only workaround) | SAMtags `CG` ("SAM and CRAM files created with updated tools … are not expected to contain this tag"; not a MUST) | `CG:B:I,…` in a `.sam` | warning | not tested |
 | SAM-M17 | Files with > 65,535-op CIGARs should declare `@HD VN` ≥ 1.6 | SAMtags Appendix (Nov 2017) | `VN:1.5` with a 70,000-op CIGAR | warning | not tested |
 
 ### 5c. SAM de facto conventions (tools depend on them; the spec does not require them)
@@ -407,9 +412,9 @@ The lesson: reference compression nearly erases the cost of the bases (4.2 vs 28
 |---|---|---|---|---|
 | SAM-C01 | `@HD` present with `SO` (or `GO`, not both) | v1.6 §2 item 1.1 (should) | no `@HD` | convention |
 | SAM-C02 | `@SQ` lines present for mapped data, and they carry `M5` (needed for CRAM and for build checks) | v1.6 §2 item 1.2; CRAMv3 §11 | `@SQ` with no `M5` | convention |
-| SAM-C03 | Every record has `RG:Z`, and `@RG` has `SM` (GATK refuses BAMs without read groups) | GATK behaviour [from memory - verify] | no `@RG` | convention |
-| SAM-C04 | MAPQ 255 is not used for real alignments. Some RNA aligners emit 255 for "unique" | v1.6 §2 item 3 (should not); STAR behaviour [from memory - verify] | MAPQ 255 on mapped reads | warning |
-| SAM-C05 | No adjacent identical ops (`3M2M`) and no zero-length ops (`0M5M`) | v1.6 §2 item 2 | `0M5M` (samtools accepted it) | warning |
+| SAM-C03 | Every record has `RG:Z`, and `@RG` has `SM` (GATK requires read groups: its `WellformedReadFilter` includes `HasReadGroupReadFilter`, and `UserException.ReadMissingReadGroup` says the RG tag "is required by the GATK") | GATK source [verified: `UserException.java`, `WellformedReadFilter.java` on GitHub master] | no `@RG` | convention |
+| SAM-C04 | MAPQ 255 is not used for real alignments. STAR emits 255 for unique mappers by default | v1.6 §2 item 3 (should not); STAR `parametersDefault`: `outSAMmapqUnique 255` [verified] | MAPQ 255 on mapped reads | warning |
+| SAM-C05 | No adjacent identical ops (`3M2M`) and no zero-length ops (`0M5M`) | v1.6 §2 item 2 covers adjacent ops only. Zero-length ops are not addressed (the regex `[0-9]+` allows `0`), so that half is a pure convention | `0M5M` (samtools accepted it) | warning |
 | SAM-C06 | An unmapped read with a mapped mate takes the mate's RNAME/POS; a fully unmapped pair has `*`/0 | v1.6 §2 items 4.1-4.2 | FLAG 133 with RNAME `*` while the mate is at chr2:166012311 | convention |
 | SAM-C07 | Secondary lines have SEQ and QUAL `*` | v1.6 §2 item 5.2; bwa does this [verified: `bwamem.c`] | — | convention |
 | SAM-C08 | `NM` present on mapped records | v1.6 §2 item 6.2 | missing `NM` | convention |
@@ -432,7 +437,7 @@ The lesson: reference compression nearly erases the cost of the bases (4.2 vs 28
 | BAM-M01 | `bin` = `reg2bin(pos, end)`. Unmapped reads and reads with no reference-consuming ops count as length 1; `reg2bin(-1,0)` = 4680 | v1.6 §4.2.1, §5.3 | stale `bin` after editing POS | error | htsjdk `INVALID_INDEXING_BIN` |
 | BAM-M02 | Indexing requires coordinate-sorted input | v1.6 §5 | unsorted BAM | error | "Unsorted positions … cannot be indexed" |
 | BAM-M03 | `.bai` cannot address positions ≥ 2^29 (512 Mbp); use `.csi` | v1.6 §5.1.1; samtools-index.1 | `@SQ LN:600000000`, read at 550,000,000 | error | "Region 549999999..550000004 cannot be stored in a bai index. Try using a csi index"; `index -c` succeeded |
-| BAM-C01 | The index sits beside the data (`x.bam.bai`, `x.bam.csi`) and was built from *this* file, after its last modification | samtools-index.1; htslib warns that an index is older than its data [from memory - verify] | `.bai` from a pre-markdup BAM | convention (silent wrong answers) |
+| BAM-C01 | The index sits beside the data (`x.bam.bai`, `x.bam.csi`) and was built from *this* file, after its last modification | samtools-index.1; htslib warns "The index file is older than the data file" [verified: htslib `hts.c`]. The check is by file timestamp only, so a copied or touched stale index passes silently | `.bai` from a pre-markdup BAM | convention (silent wrong answers) |
 | BAM-C02 | The binary reference list and the `@SQ` text lines agree | v1.6 §4.2 (both present) [from memory - verify which wins in each library] | header edited by hand without re-encoding | convention |
 
 ### 5e. CRAM rules
@@ -451,7 +456,7 @@ The lesson: reference compression nearly erases the cost of the bases (4.2 vs 28
 | CRAM-M03 | The reference must be obtainable at decode time (unless embedded or `no_ref`) | CRAMv3 §11; samtools.1 "REFERENCE SEQUENCES" | FASTA moved after encoding | error | "Unable to fetch reference ref:7-45 … Failure to decode slice". `view -c` and `quickcheck` still work without it |
 | CRAM-M04 | Indexing only on coordinate-sorted files; every slice is listed in `.crai` | CRAMv3 §12 | — | error | — |
 | CRAM-C01 | Keep the exact FASTA (by `M5`) for as long as the CRAMs. htslib ≥ 1.22 no longer falls back to the EBI reference server, and http/ftp `UR` values are ignored | samtools.1 (1.24) "REF_PATH", "REFERENCE SEQUENCES"; htslib reference_seqs doc | lab relies on the EBI server | convention (critical) |
-| CRAM-C02 | Writers that use no 3.1 codecs should label the file 3.0; check that consumers read 3.1 (the htslib page says htsjdk support was still a pull request when written [from memory - verify current status]) | CRAMv3 §6 ("should"); htslib benchmarks | 3.1 CRAM handed to an htsjdk-based tool | convention |
+| CRAM-C02 | Writers that use no 3.1 codecs should label the file 3.0; check that consumers read 3.1. The htslib 1.22 NEWS (May 2025) and benchmarks page said htsjdk support was only a draft / pull request. htsjdk `master` now lists 3.1 as supported and as its default write version [verified: `CramVersions.java`], but which released htsjdk, GATK and Picard versions include it was not checked | CRAMv3 §6 ("should"); htslib NEWS 1.22; htsjdk source | 3.1 CRAM handed to an older htsjdk-based tool | convention |
 | CRAM-C03 | A round trip is not textually identical. htslib regenerates `MD`/`NM` on decode by default (`decode_md=1`) and may regenerate read names (`lossy_names`) | samtools.1 fmt options; observed [verified: test] | `diff` of SAM→CRAM→SAM flags `MD`/`NM` lines | convention |
 | CRAM-C04 | Lossy choices (binned or dropped qualities, dropped names) are recorded in `@PG`/`@CO` | CRAMv3 §1 (no rule imposed) | — | convention |
 
@@ -461,7 +466,7 @@ The lesson: reference compression nearly erases the cost of the bases (4.2 vs 28
 |---|---|---|
 | Text starting `@HD	VN:` or `@SQ	SN:` | SAM header | FASTQ also starts with `@`, but a FASTQ header is `@readname …` followed by a sequence line and a `+` line. SAM header codes are exactly two uppercase letters then a TAB |
 | ≥ 11 TAB-separated columns; col 2 an integer, col 4 an integer, col 6 like `150M` or `60M40S`, col 7 `=` or `*` | SAM alignment line | **PAF** has 12+ columns with a strand `+`/`−` in col 5, lengths in cols 2 and 7, and tags like `tp:A:P`. **BLAST tabular** (outfmt 6) has 12 columns ending in e-value and bitscore |
-| Bytes `1f 8b 08 04 … 06 00 42 43 02 00` | BGZF (BAM, `.vcf.gz`, `.bed.gz`, `.fa.gz` from bgzip, `.csi`) | Decompress the first block: `BAM\1` = BAM; `##fileformat=VCF` = VCF; `BCF\2\2` = BCF [from memory - verify] |
+| Bytes `1f 8b 08 04 … 06 00 42 43 02 00` | BGZF (BAM, `.vcf.gz`, `.bed.gz`, `.fa.gz` from bgzip, `.csi`) | Decompress the first block: `BAM\1` = BAM; `##fileformat=VCF` = VCF; `BCF\2\2` = BCF (magic `BCF`, major 2, minor 2 [verified: VCFv4.3.tex §6.1]) |
 | Bytes `1f 8b 08 00` or `1f 8b 08 08` (a file name follows) | plain gzip | Not BGZF: cannot be indexed; never a valid BAM |
 | First 4 bytes `43 52 41 4d` (`CRAM`) then `03 00`/`03 01` | CRAM 3.0 / 3.1 | The next 20 bytes are usually the file name, NUL-padded |
 | Last 28 bytes `1f 8b 08 04 00 00 00 00 00 ff 06 00 42 43 02 00 1b 00 03 00 00 00 00 00 00 00 00 00` | complete BGZF file | Any other tail means truncated (or plain gzip) |
@@ -471,7 +476,7 @@ The lesson: reference compression nearly erases the cost of the bases (4.2 vs 28
 
 ## 7. Common misconceptions and real-world pitfalls
 
-1. **"MAPQ is a quality score of the read."** It is the probability that the *placement* is wrong. A perfect read in a segmental duplication gets MAPQ 0. MAPQ 255 means "unavailable", not "excellent". Some tools nevertheless use 255 for unique hits [from memory - verify for STAR].
+1. **"MAPQ is a quality score of the read."** It is the probability that the *placement* is wrong. A perfect read in a segmental duplication gets MAPQ 0. MAPQ 255 means "unavailable", not "excellent". Some tools nevertheless use 255 for unique hits: STAR's default `outSAMmapqUnique` is 255 [verified: STAR `parametersDefault`].
 2. **"RNAME/POS filled in means mapped."** Only 0x4 says that. Placed unmapped mates sit at their partner's coordinates on purpose (§1.4, §2 item 4.1).
 3. **"Secondary and supplementary are the same thing."**
    - Secondary (0x100) = the *whole* read placed elsewhere (a repeat); usually low MAPQ; SEQ often `*`.
@@ -485,10 +490,11 @@ The lesson: reference compression nearly erases the cost of the bases (4.2 vs 28
 8. **"0x2 proper pair is defined by the spec."** It is "according to the aligner". bwa infers it from the insert-size distribution of each batch.
 9. **Sorting a SAM with Unix `sort`.** Coordinate order follows `@SQ` order (chr1, chr2, …, chr10 in GRCh38's dictionary), not alphabetical order. Queryname order differs between libraries (natural vs lexicographic).
 10. **Truncated files that "work".** A BAM cut at a block boundary passes `gzip -t` and `samtools view` reads every surviving record with only a warning [verified: test]. Always run `samtools quickcheck`. But `quickcheck` passed a plain-gzip "BAM" and does not read the middle of the file, so it is not a validator either.
-11. **Stale or mismatched indexes.** An index built before re-sorting or `markdup` returns wrong or empty regions. `.bai` cannot handle contigs ≥ 512 Mbp (some plant and amphibian genomes); use `.csi`.
+11. **Stale or mismatched indexes.** An index built before re-sorting or `markdup` returns wrong or empty regions. `.bai` cannot address positions ≥ 2^29 (512 Mbp), so it fails on long contigs (some plant and amphibian genomes) as soon as a read is placed beyond that point; use `.csi`. (A 600-Mbp contig with reads only near its start indexed fine with `.bai` at verification.)
 12. **CRAM without its reference is a brick.**
     - htslib ≥ 1.22 no longer fetches from the EBI server by default, and http/ftp `UR:` tags are ignored.
-    - A "close enough" FASTA (UCSC hg38 vs the Broad analysis set) fails the per-contig MD5 check.
+    - The decoder checks the MD5 of the reference bases **per slice**, not per contig [verified at fact-check: a FASTA differing at one base decoded slices elsewhere without complaint and failed only on the slice covering that base]. A different build (GRCh37/hg19 named `chr2`) fails everywhere.
+    - "Close enough" GRCh38 copies are the dangerous case. GENCODE/Ensembl GRCh38 `chr2` differs from the Broad analysis set only at 9 IUPAC-code positions (written as `N`). Its whole-contig M5 is therefore different (`4bb4f828…` vs `f98db672…` [verified]), so an M5-keyed `REF_PATH` lookup will not find it. But `-T` decoding fails only for slices that cover one of those 9 bases, none of them near *SCN1A*. UCSC hg38 is expected to behave the same way, because its 2bit-derived FASTA cannot hold IUPAC codes [from memory - verify].
     - `ignore_md5=1` silently corrupts bases [verified: test].
 13. **"CRAM is lossy."** It is lossless by default; loss is opt-in. A SAM→CRAM→SAM round trip still differs textually, because `MD`/`NM` are regenerated (`decode_md`) [verified: test]. Compare records, not `diff` output.
 14. **"samtools accepted it, so it's valid."** samtools 1.24 accepted all of these, which is why the course needs its own validator (§5):
@@ -497,8 +503,8 @@ The lesson: reference compression nearly erases the cost of the bases (4.2 vs 28
     - `NM:i:one` (stored as 0);
     - `-` in SEQ (stored as N);
     - a space in QNAME;
-    - `RG` with no `@RG`;
-    - reads past the contig end.
+    - an `RG:Z` value that matches no `@RG ID` (a MUST violation when `@RG` lines exist; with no `@RG` lines at all it breaks only a should, §2 item 1.3);
+    - reads past the contig end (a should-level rule, §2 item 4.3; POS > LN has no explicit MUST, see SAM-M05).
 15. **Read groups are sample identity.** Joint genotyping tells mother from child by `@RG SM`. A copy-pasted SM produces a sample swap that looks like a de novo variant.
 16. **Duplicates inflate evidence.** A "de novo" supported only by 0x400 reads is one molecule counted many times.
 
@@ -594,7 +600,7 @@ r001	99	ref	7	30	8M2I4M1D3M	=	37	39	TTAGATAAAGGATACT	*
 **Snippet** (single TABs between fields):
 
 ```
-@HD	VN:1.6	SO:coordinate
+@HD	VN:1.6	SO:unsorted
 @SQ	SN:ref	LN:45
 a1	0	ref	7	30	8M	*	0	0	TTAGATAA	IIIIIII
 a2	0	chr1	9	30	6M	*	0	0	AGATAA	IIIIII
@@ -612,6 +618,8 @@ a5	0	ref	16	30	6M14N5M	*	0	0	ATAGCTTCAGC	IIIIIIIIIII
 - **a5** is valid: it is the spec's spliced read; `calmd` gives `MD:Z:11 NM:i:0`.
 
 **Explanation (reveal after answering).** samtools 1.24 rejects a1 and *warns* on a2 and a4, converting both to unmapped. It **accepts a3 silently**. Validators and parsers are not the same thing.
+
+**Verification note.** The header was changed from `SO:coordinate` to `SO:unsorted`. With `SO:coordinate`, a4 (POS 0 after a3's POS 9) also broke the declared sort order (SAM-M07), so the file held an unintended extra error.
 
 ### EX-07 · fix-it: "Repair the header"
 
@@ -632,11 +640,13 @@ r1	0	ref	7	30	5M	*	0	0	TTAGA	*	RG:Z:P042-proband.L001
 
 **Answer.** Move `@HD` to line 1, and add `ID:P042-proband.L001` to the `@RG` line.
 
-**Explanation.** samtools would silently reorder `@HD` and would not notice an RG mismatch at all. GATK would later refuse the file or mislabel the sample.
+**Explanation.** samtools would reject the `@RG` line without `ID` ("Header includes @RG line with no ID: tag"). Once that is fixed, it would silently reorder `@HD` and would not notice an `RG:Z` value that matches no `@RG ID` [verified at fact-check]. GATK requires a valid read group and would later refuse or drop the reads, or the sample would be mislabelled.
 
 ### EX-08 · field-explorer (case): "The child's split read"
 
-**Snippet.** Real GRCh38 bases [verified: GRCh38 + `samtools calmd -e`: every aligned base matches]. Single TABs between fields:
+**Placeholder case coordinates.** This deletion lies in *SCN1A* intron 21 and removes no exon. `case.md` §3.6 replaces it with the 25,213-bp exon 17-20 deletion (see the note at the top).
+
+**Snippet.** Real GRCh38 bases [verified: GRCh38 + `samtools calmd -e`: every aligned base matches; re-verified at fact-check, and the SEQ/QUAL of the supplementary equal the last 40 bases/qualities of the primary]. Single TABs between fields:
 
 ```
 @HD	VN:1.6	SO:coordinate
@@ -687,7 +697,7 @@ chr2	166012369	166012370	chr2	166012738	166012739	split_6789	60	+	-
 
 - Strand `+ −` is the deletion signature: the left piece reads into the breakpoint from the left, the right piece from the right.
 - Callers pool many such reads and widen each end into a confidence window. The BEDPE lesson's `DEL_1` uses 20-bp windows centred on these same fence posts.
-- LUMPY's extractor keeps reads whose `SA` list has ≤ 2 elements (default `-n 2`) and whose pieces overlap by little on the read (`-m 20` non-overlapping bases) [verified: `extractSplitReads_BwaMem`].
+- LUMPY's extractor keeps reads with at most 2 split mappings in total (default `-n 2`). It tests `len(SA.split(";")) <= 2`, and the trailing `;` adds an empty piece, so only a single `SA` entry passes. Each piece must also have at least 20 query bases not overlapped by the other (`-m 20`), and duplicates are skipped unless `-d` is given [verified: `extractSplitReads_BwaMem`]. This read passes: one `SA` entry; 60 and 40 non-overlapping bases.
 
 ### EX-11 · sort (hex): "Is this BAM truncated?"
 
@@ -711,7 +721,9 @@ chr2	166012369	166012370	chr2	166012738	166012739	split_6789	60	+	-
 
 ### EX-12 · mcq (case): "The father's CRAM won't open"
 
-**Prompt.** `samtools view father.cram chr2:166012000-166013000` prints `[E::cram_decode_slice] MD5 checksum reference mismatch … @SQ M5: f98db672…`. You used `-T hg38_ucsc.fa`. What should you do?
+**Prompt.** `samtools view father.cram chr2:166012000-166013000` prints `[E::cram_decode_slice] MD5 checksum reference mismatch … @SQ M5: f98db672…`. You used `-T hg19.fa`, a GRCh37 FASTA that also names its chromosomes `chr2`. What should you do?
+
+**Verification note.** The original premise used `-T hg38_ucsc.fa`. That would not fail here: CRAM checks the MD5 per slice, and a GRCh38 copy from another provider differs from the Broad `chr2` at most at 9 IUPAC positions, none near 166 Mb (verified for GENCODE; see misconception 12).
 
 **Options.**
 
@@ -728,7 +740,7 @@ chr2	166012369	166012370	chr2	166012738	166012739	split_6789	60	+	-
 - (c) needs the same reference to decode.
 - (d) is unrelated; the index has no bases.
 
-### EX-13 · simulator (BGZF/index random access): "Jump to the exon"
+### EX-13 · simulator (BGZF/index random access): "Jump to the breakpoint"
 
 **Prompt.** The simulator animates a 3-block BAM and a toy `.bai`. Which BAI bin holds the primary piece (0-based [166012310, 166012370))? What does the illustrative virtual offset `(9371224<<16)|412` mean?
 
@@ -807,7 +819,7 @@ chr2	166012369	166012370	chr2	166012738	166012739	split_6789	60	+	-
 *Explanations.*
 
 - (a) An unsorted file fails with a different message ("Unsorted positions").
-- (b) Correct: BAI bins stop at 2^29.
+- (b) Correct: BAI bins stop at 2^29. Strictly, the failure appears when a read lies at or beyond 2^29 on such a contig; the long `@SQ` line alone does not trigger it.
 - (c) A missing EOF marker gives a different symptom (a warning).
 - (d) Invented.
 
@@ -836,7 +848,7 @@ chr2	166012369	166012370	chr2	166012738	166012739	split_6789	60	+	-
 - (b) It must see both mates together to fill in mate fields and `MC`.
 - (a), (c), (d) require coordinate order.
 
-**Q8 (application).** A de novo SNV in the child has 6 supporting reads. All six have FLAG 1123 or 1187 and identical start positions. Should you trust it?
+**Q8 (application).** A de novo SNV in the child has 6 supporting reads. All six share the same start and mate positions; five have FLAG 1123 or 1187 and one has FLAG 99. Should you trust it?
 
 - (a) Yes; 6 reads is plenty.
 - (b) No; 0x400 marks duplicates, so this is likely one molecule amplified. ✔
@@ -845,7 +857,7 @@ chr2	166012369	166012370	chr2	166012738	166012739	split_6789	60	+	-
 
 *Explanations.*
 
-- (b) 1123 = 99 + 1024 and 1187 = 163 + 1024. Callers skip 0x400.
+- (b) 1123 = 99 + 1024 and 1187 = 163 + 1024. Duplicate marking leaves one representative of each duplicate set unmarked (here the FLAG 99 read) and flags the rest, so the evidence is one molecule. Callers skip 0x400. (Verification note: the original stem had all six reads flagged 0x400, which a duplicate marker would not produce on its own.)
 - (c) MAPQ is about placement, not independent evidence.
 - (d) 1187 decodes fine.
 
@@ -854,12 +866,13 @@ chr2	166012369	166012370	chr2	166012738	166012739	split_6789	60	+	-
 - **SAM lesson opener: "placing reads on the map".** The trio's FASTQs (FASTQ lesson: `P042-proband`, `P042-mother`, `P042-father`, tens of millions of pairs each) go through `bwa mem -R '@RG\tID:…\tSM:P042-proband…' GRCh38.fa R1 R2`.
   - Learners see the first header lines: `@SQ SN:chr2 LN:242193529 M5:f98db672…` ties back to the FASTA lesson's `.fai`/M5.
   - They see `@RG SM` naming the sample, the first coordinate-sorted records, and their first FLAG decode (EX-01).
-- **"What did the aligner do with the hard parts?"** At the *SCN1A* exon target T3 (BED lesson: chr2:166,012,441-166,012,660), the child's reads include split reads (EX-08) and discordant pairs (EX-09).
+- **"What did the aligner do with the hard parts?"** At placeholder target T3 (BED lesson: chr2:166,012,441-166,012,660), the child's reads include split reads (EX-08) and discordant pairs (EX-09).
+  - T3 is **not** an *SCN1A* exon: it lies in intron 21, between exons 22 (166,012,109-166,012,282) and 21 (166,013,744-166,013,898) [verified: GENCODE v27 refFlat; Twist targets]. Use the canonical exon 17-20 targets and deletion from `case.md` (note at the top).
   - The parents' BAMs have none.
   - This sets up the WIG lesson (the depth dip, counted by `samtools depth` with default flags, EX-02) and the BEDPE lesson (EX-10).
-- **"Is the evidence real?"** Duplicates (Q8), MAPQ in a paralogous region, and strand balance. `SCN1A` has paralogs in the same cluster (SCN2A, SCN3A on chr2) [gene neighbourhood from memory - verify], which makes MAPQ a natural topic.
-- **BAM/CRAM lesson: "archiving cheaply".** The core converts three 30× exome BAMs to CRAM 3.1 (about one third of the size, §3.8) and must archive `Homo_sapiens_assembly38.fasta` with them (CRAM-C01).
-  - Plot twist: the father's CRAM was decoded with the UCSC hg38 FASTA and fails the MD5 check (EX-12, Q4).
+- **"Is the evidence real?"** Duplicates (Q8), MAPQ in a paralogous region, and strand balance. *SCN1A* sits in a sodium-channel cluster on chr2: SCN3A (−) and SCN2A (+) end about 0.8 and 0.6 Mb below it in coordinates, and SCN9A (−, 46 kb away) and SCN7A (−) lie just above it [verified: GENCODE v27 refFlat], which makes MAPQ a natural topic.
+- **BAM/CRAM lesson: "archiving cheaply".** The core converts the three exome BAMs (mean target depth 116×, 121× and 63× in `case.md`) to CRAM 3.1 (about one third of the size, §3.8) and must archive `Homo_sapiens_assembly38.fasta` with them (CRAM-C01).
+  - Plot twist: the father's CRAM was decoded with a GRCh37 (`hg19.fa`) FASTA and fails the MD5 check (EX-12). A GRCh38 copy from another provider would *not* fail at *SCN1A* (misconception 12). Q4 covers the separate "no reference at all" failure.
 - **Capstone planted problems:**
   1. `mother.bam` missing its 28-byte EOF (BAM-S03), indistinguishable from a good file except by the EOF check (EX-11 B).
   2. `father.cram` plus a non-matching FASTA (CRAM-M02).
@@ -878,7 +891,7 @@ chr2	166012369	166012370	chr2	166012738	166012739	split_6789	60	+	-
 - **`=` in SEQ / `samtools calmd -e`:** matching bases shown as `=`.
 - **`MD` grammar details:** the mandatory `0` between adjacent mismatches (`10A0C5`); `N`/`I`/`S` are invisible to it.
 - **`CG` tag** for CIGARs over 65,535 ops and the `kSmN` placeholder (§4.2.2).
-- **Virtual offsets and the BAI binning tree:** 37,450 bins, the linear index, `reg2bin(-1,0)` = 4680, `n_no_coor`. CSI's `min_shift`/`depth`.
+- **Virtual offsets and the BAI binning tree:** 37,449 regular bins (0-37,448) plus the metadata pseudo-bin 37,450, the linear index, `reg2bin(-1,0)` = 4680, `n_no_coor`. CSI's `min_shift`/`depth` (the BAI-equivalent is `min_shift` 14, `depth` 5).
 - **BAM's 4-bit SEQ code** `=ACMGRSVTWYHKDBN` (case is lost) and raw-Phred QUAL with 0xFF = absent.
 - **CRAM internals:** data series, itf8 integers, the substitution matrix, and why random access needs two reads. The EOF container's start field spells "EOF".
 - **CRAM 3.1 codecs and profiles** (`fast`/`normal`/`small`/`archive`).
@@ -915,4 +928,86 @@ samtools 1.24 via pysam 0.24.1 on 2026-10-16: about 50 SAM validity cases, BAM/C
 
 - `www.htslib.org` (DNS failure from WebFetch). The same pages were read from the site's GitHub source instead.
 - `github.com` web pages and the GitHub API (403 / not enabled), so exact hts-specs commit hashes for SAMtags.tex and CRAMv3.tex could not be recorded.
-- Not attempted, per the network notes (known blocked): `gatk.broadinstitute.org` and GATK read-group requirements (SAM-C03), STAR's MAPQ convention (SAM-C04), htsjdk CRAM 3.1 status (CRAM-C02). Claims depending on them are marked [from memory - verify].
+- Not attempted, per the network notes (known blocked): `gatk.broadinstitute.org` and GATK read-group requirements (SAM-C03), STAR's MAPQ convention (SAM-C04), htsjdk CRAM 3.1 status (CRAM-C02). Claims depending on them were marked [from memory - verify]. All three were later checked against GitHub source at verification (see the Verification log).
+
+## Verification log
+
+An adversarial fact-check on 2026-10-16. Primary sources were re-fetched independently from `raw.githubusercontent.com/samtools/hts-specs/master`: `SAMv1.tex`, `SAMtags.tex`, `CRAMv3.tex`, `CSIv1.tex` and `VCFv4.3.tex` (BCF magic). Every SAM rule in §5a/§5b, the valid example, and the BAM, CRAM, BAI and CSI byte behaviours were re-run in samtools 1.24 / pysam 0.24.1.
+
+Real data, also re-fetched:
+- Broad GRCh38 `.dict`/`.fai` and FASTA byte ranges (S3);
+- the whole `chr2` from the Broad analysis set and from the GENCODE `GRCh38.primary_assembly.genome.fa` (`gcp-public-data--broad-references`);
+- `GRCh38_gencode.v27.refFlat.txt` and the Twist exome `interval_list` (same bucket).
+
+Other sources:
+- samtools 1.24 man pages: `samtools.1`, `-depth`, `-sort`, `-fixmate`, `-markdup`, `-fasta`, `-quickcheck`;
+- htslib `NEWS`, `sam.c` and `hts.c`;
+- htslib `benchmarks/CRAM.md` and `doc/reference_seqs.md`;
+- `bwa.1`, `bwamem.c`, `bwamem_extra.c` and `minimap2.1`;
+- LUMPY `extractSplitReads_BwaMem`;
+- htsjdk `SAMValidationError.java` and `CramVersions.java`;
+- GATK `UserException.java` and `WellformedReadFilter.java`;
+- STAR `parametersDefault`.
+
+### Corrections made (claim → correction → source)
+
+1. **Case biology.** "*SCN1A* exon target T3 (chr2:166,012,441-166,012,660)"; a 368-bp `DEL_1` over it → T3 and the whole deletion are **intronic** (intron 21, between exons at 166,012,109-166,012,282 and 166,013,744-166,013,898), and no exome capture target lies there. The canonical case (`case.md`) uses a 25,213-bp deletion of exons 17-20 instead. A banner was added at the top, §10 was rewritten, EX-08 was flagged and EX-13 was retitled → GENCODE v27 refFlat (all *SCN1A* transcripts); Twist `interval_list`; `case.md` §3.4/§10.2.
+2. **EX-12 premise.** "`-T hg38_ucsc.fa` gives an MD5 mismatch at chr2:166,012,000-166,013,000" → it would not. htslib checks the reference MD5 **per slice**, and GRCh38 copies differ from the Broad `chr2` at most at 9 IUPAC positions (verified for GENCODE), none near 166 Mb. The prompt now uses a GRCh37 `hg19.fa`; the keyed answer (b) is unchanged → test: a FASTA altered at one base decoded other slices without error; full `chr2` diff of GENCODE vs Broad (M5 `4bb4f82880a14111eb7327169ffb729b` vs `f98db672…`; differences at 20,953,875, 109,493,618, 233,142,970-233,145,086 ×6 and 239,866,291); lowercase (soft-masked) FASTA also decoded fine.
+3. **Misconception 12.** "UCSC hg38 vs the Broad analysis set fails the per-contig MD5 check" → rewritten: the check is per slice, whole-contig M5 differs (breaks M5-keyed `REF_PATH` lookup), and decoding fails only on slices covering a differing base → same evidence as item 2. UCSC's IUPAC handling itself is [from memory - verify].
+4. **LUMPY.** "keeps reads whose `SA` list has ≤ 2 elements (`-n 2`)" → at most **one** `SA` entry (≤ 2 mappings in total; the code tests `len(SA.split(";")) <= 2`, and the trailing `;` adds an empty piece). It also skips duplicates by default → `extractSplitReads_BwaMem`.
+5. **BAI bins.** "37,450 bins" → 37,449 regular bins (0-37,448) plus metadata pseudo-bin 37,450 → SAMv1 §5.1.1, §5.2.
+6. **Benchmark table.** "10 M coordinate-sorted alignments per dataset" → true for the two Illumina sets only. The Revio set has no stated count and was aligned to T2T HG002 → `benchmarks/CRAM.md`.
+7. **EX-07 explanation.** "samtools would silently reorder `@HD` and would not notice an RG mismatch" → samtools **rejects** the ID-less `@RG` ("Header includes @RG line with no ID: tag"); only after that is fixed does it reorder `@HD` and ignore the dangling `RG:Z` → test.
+8. **EX-06.** The header declared `SO:coordinate`, so a4 (POS 0 after POS 9) also broke sort order: an unintended second error. It is now `SO:unsorted`, and the answer key is unchanged → SAMv1 §1.3 `SO`.
+9. **Q8.** "All six reads have FLAG 1123/1187" → duplicate marking leaves one representative unmarked. The stem now has five duplicates and one FLAG 99 read; the key (b) is unchanged → samtools-markdup.1 behaviour.
+10. **SAM-M08 and misconception 14.** "`RG` with no `@RG`" was listed as a spec violation → the SAMtags MUST applies only when `@RG` lines exist. With none, only SAMv1 §2 item 1.3 (should) applies. Severity is now split error/warning → SAMtags §1.2; SAMv1 §2.
+11. **SAM-M05.** Cited as a v1.6 requirement → there is no explicit MUST that POS ≤ LN. It is kept as an error by course choice (htsjdk), and the citation was fixed → SAMv1 §1.4, §2 item 4.3; CRAMv3 §11 item 3.
+12. **SAM-M03.** It is now marked as implied by the field definitions, not an explicit MUST. The htslib messages were added → SAMv1 §1.4; `sam.c`.
+13. **SAM-M16.** "`CG` must not appear in SAM/CRAM" → "not expected to contain" (not a MUST) → SAMtags `CG`.
+14. **SAM-C05.** Zero-length ops were attributed to §2 item 2 → that item covers adjacent ops only; zero-length ops are a pure convention → SAMv1 §2.
+15. **`MC` row.** "`samtools fixmate -m` … uses it" → `fixmate` writes `MC` with or without `-m`; `-m` adds `ms`; `markdup` relies on both → samtools-fixmate.1, samtools-markdup.1.
+16. **BAM aux integers.** "stored as the smallest of `cCsSiI`" → any of them, "typically the smallest" (an implementation choice) → SAMv1 §4.2.4.
+17. **`embed_ref`.** It was described as if 1 and 2 both embed the reference → `embed_ref=2` embeds a consensus built from the reads, and htslib auto-selects it when the reference is missing at encode time → samtools.1; `reference_seqs.md`.
+18. **CF 0x1.** "Quality scores are optional per record (CF 0x1 …)" → CF 0x1 marks qualities stored as a full array; otherwise only per-feature scores are kept → CRAMv3 §10.1.
+19. **SAM-S06 and SAM-S20.** "not tested" → tested: differing duplicate `LN` fails (htslib ≥ 1.22), identical duplicates pass silently; a BOM fails "fail to read the header" → test; htslib NEWS 1.22.
+20. **TLEN tie rule.** "If both segments start at the same coordinate" → "cover the same coordinates" (spec wording) → SAMv1 §1.4 item 9.
+21. **Q5 and misconception 11.** "a contig longer than 2^29 bp" → BAI fails only when a read lies at ≥ 2^29; a 600-Mbp contig with early reads indexed fine → test.
+22. **§10 depth.** "three 30× exome BAMs" → canonical mean target depths 116×/121×/63× (exomes are rarely 30×) → `case.md` §3.2.
+23. **§10 paralogs.** "SCN2A, SCN3A [from memory]" → verified, and SCN9A (46 kb away) and SCN7A were added → GENCODE v27 refFlat.
+24. **`.crai` example.** It is now noted that column 4 depends on header length (re-run gave 421, not 433) → test.
+25. **Promoted from [from memory - verify] to verified:**
+    - GATK read-group requirement (SAM-C03) → `UserException.ReadMissingReadGroup`, `WellformedReadFilter`;
+    - STAR MAPQ 255 (SAM-C04, misconception 1) → `parametersDefault`;
+    - htslib stale-index warning (BAM-C01) → `hts.c`;
+    - BCF magic `BCF\2\2` → VCFv4.3 §6.1;
+    - htsjdk CRAM 3.1 (CRAM-C02): `master` supports 3.1 and writes it by default → `CramVersions.java`.
+
+### Re-verified and found correct (selection)
+
+- **Spec content.**
+  - Header regex, tag-uniqueness and `@HD`-first rules; the 11-field table (regexes and ranges); FLAG bits and every worked decode.
+  - CIGAR consume table and H/S placement rules; optional-field types and the X/Y/Z/lowercase reservation.
+  - `MD` grammar and example; `NM` definition; `SA` format and the "first element points to primary" convention.
+  - BGZF layout and the 28-byte EOF; BAM record layout (0-based `pos`, `l_read_name`, 4-bit SEQ, 0xFF QUAL); `reg2bin(-1,0)=4680`; the BAI 2^29 limit.
+  - CSI defaults (`min_shift` 14, `depth` 5); CRAM file definition, versions, block methods 5-8 = 3.1, the 38-byte EOF (start 4542278 = "EOF"), the `.crai` six columns, and `@SQ M5` required unless embedded.
+- **samtools 1.24 behaviour.** Every samtools message quoted in §5a/§5b matched, and so did the BAM/CRAM truncation, plain-gzip, CSI-depth-6, CRAM wrong-reference, `ignore_md5` corruption (`CAGCGGCAT`→`CAGCGGCAA`) and missing-reference behaviours.
+- **Defaults.** CRAM 3.1 is the default and the EBI fallback was removed in htslib 1.22; `samtools depth` defaults to `UNMAP,SECONDARY,QCFAIL,DUP`; `samtools fastq` defaults to `-F 0x900`.
+- **Benchmark numbers.** The NovaSeq, HiSeq and Revio sizes, the quality shares (50%, 86%), the 175.5/186.8/224.2 MB reference-mode figures, and "around 700MB".
+- **Example and exercise arithmetic.**
+  - Toy `M5` `7a66cae8…`; the valid example passes `samtools view` silently.
+  - EX-01 to EX-05 and EX-09 to EX-13 arithmetic and keys: CIGAR ends, TLEN 39/668/240 (bwa formula), bin 14813, breakend fence posts 166,012,370/166,012,738, 368 bp; no microhomology at the placeholder junction.
+  - Q1-Q7 keys and distractor explanations.
+- **Case snippet and tool sources.** The EX-08 SEQ/QUAL against GRCh38 (`calmd -e`: all `=`); bwa hard-clips supplementary lines but writes `S` in `SA`; the bwa TLEN formula; bwa.1 `-M` quote; minimap2 `-Y`/`--eqx`.
+
+### Could not verify
+
+- §3.8 "Size, measured here" table (the simulation was not re-run).
+- File-specific bytes and offsets:
+  - §3.7 first-18-bytes example (BSIZE 149, `l_text` 127);
+  - BAM-S04's exact offsets (the same message pattern was reproduced with different numbers);
+  - EX-11 hex dumps A-C (the files were not available; A/B/D are internally consistent and D's tail matches the spec EOF container).
+- UCSC hg38 replacing IUPAC codes with `N` (hgdownload/UCSC blocked) [from memory - verify]. The EX-12 correction does not depend on it.
+- Which released htsjdk, GATK and Picard versions read CRAM 3.1; BAM-C02 (which header copy wins).
+- That bwa would emit exactly the EX-08 MAPQ/AS values (consistent with `bwamem.c`, not run).
+- Whether `f98db672…` is the INSDC/refget `chr2` MD5. It matches the Broad `.dict` and the recomputed Broad sequence; the ENA registry was not reachable.
+- **Side observation for `case.md` (not edited here).** Its canonical split read `96M54S` sits at a 7-bp microhomology (`CACCATG`). A local aligner such as bwa would normally extend the primary through it (for example `103M47S`), with the supplementary still able to start at 166,040,116. Its owner may want to state that `96M54S` is the left-aligned convention.

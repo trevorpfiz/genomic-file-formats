@@ -14,6 +14,8 @@ Research notes for the "Genomic File Formats" course, covering the gVCF and VCF 
 
 **Case coordinates.** The variants sit inside the GRCh38 *SCN1A* locus on chr2 and reuse the illustrative capture targets and the 368-bp deletion from `intervals-signals.md`. The SNV at chr2:166,009,959 lies in illustrative target T2, **not** in a verified SCN1A exon. The REF bases are real.
 
+> **Superseded case story (fact-check, 2026-10-16).** `case.md` is the canonical case definition, and its §10.2 replaces this note's case placeholders. The de novo SNV chr2:166,009,959 becomes DN-2 = chr2:166,009,887 C>T (the father is a true carrier called `0/0` at GQ 12) plus the real de novo DN-1 in *SCN9A* at chr2:166,204,022. The 368-bp `<DEL>` at 166,012,370 becomes a 25,213-bp paternal-origin deletion (`chr2 166014902 . C <DEL> ... SVLEN=25213;SVCLAIM=DJ`). EX-08's "hemizygous `1/1`" becomes a hemizygous `0/0` at rs2298771 (father `1/1`). The snippets below remain valid *format* examples, and their REF bases are real GRCh38. They are **not** the case's story. Before lessons ship, take every case coordinate, genotype and the de novo narrative from `case.md`. As written here, the story also has the child carry two independent de novo events in *SCN1A* (the SNV and the deletion). That is clinically implausible, and `case.md` avoids it.
+
 ---
 
 ## 1. Purpose and place in the pipeline
@@ -84,6 +86,7 @@ This is a joint-genotyped trio VCF. It passed htslib parsing, BCF conversion, `t
 ##INFO=<ID=AN,Number=1,Type=Integer,Description="Total number of alleles in called genotypes">
 ##INFO=<ID=DP,Number=1,Type=Integer,Description="Combined depth across samples">
 ##INFO=<ID=SVLEN,Number=A,Type=Integer,Description="Length of structural variant">
+##INFO=<ID=SVCLAIM,Number=A,Type=String,Description="Claim made by the structural variant call. Valid values are D, J, DJ for abundance, adjacency and both respectively">
 ##FORMAT=<ID=GT,Number=1,Type=String,Description="Genotype">
 ##FORMAT=<ID=AD,Number=R,Type=Integer,Description="Read depth for each allele">
 ##FORMAT=<ID=DP,Number=1,Type=Integer,Description="Read depth">
@@ -92,7 +95,7 @@ This is a joint-genotyped trio VCF. It passed htslib parsing, BCF conversion, `t
 ##PEDIGREE=<ID=CHILD,Father=FATHER,Mother=MOTHER>
 #CHROM	POS	ID	REF	ALT	QUAL	FILTER	INFO	FORMAT	CHILD	MOTHER	FATHER
 chr2	166009959	.	C	T	512.3	PASS	AC=1;AN=6;DP=101	GT:AD:DP:GQ:PL	0/1:17,18:35:99:520,0,480	0/0:38,0:38:99:0,99,1485	0/0:28,0:28:84:0,84,1260
-chr2	166012370	.	T	<DEL>	.	PASS	AC=1;AN=6;SVLEN=368	GT	0/1	0/0	0/0
+chr2	166012370	.	T	<DEL>	.	PASS	AC=1;AN=6;SVLEN=368;SVCLAIM=DJ	GT	0/1	0/0	0/0
 chr2	166013043	.	TTC	T	233.1	PASS	AC=2;AN=6;DP=96	GT:AD:DP:GQ:PL	0/1:15,16:31:99:240,0,310	0/1:19,17:36:99:228,0,390	0/0:29,0:29:87:0,87,1305
 ```
 
@@ -104,7 +107,7 @@ chr2	166013043	.	TTC	T	233.1	PASS	AC=2;AN=6;DP=96	GT:AD:DP:GQ:PL	0/1:15,16:31:99
 | `##ALT=<ID=DEL>` | Declares the symbolic allele used in record 2. |
 | `##PEDIGREE` | Optional in-file pedigree (§1.4.9). Most trio tools want a separate PED file instead (§3.7). |
 | Record 1 | **De novo candidate.** The child is `0/1` with 17 REF and 18 ALT reads. Both parents are `0/0` with GQ 99 and 84. `PL` has 3 values (`0/0,0/1,1/1`), and the 0 sits at the called genotype. |
-| Record 2 | **Symbolic deletion.** POS 166,012,370 is the *base before* the event (a T in GRCh38). SVLEN=368, so the deleted bases are 166,012,371-166,012,738 and htslib computes the record end as 166,012,738 [verified: test]. Its FORMAT is only `GT`, which is legal because FORMAT is chosen per record. |
+| Record 2 | **Symbolic deletion.** POS 166,012,370 is the *base before* the event (a T in GRCh38). SVLEN=368, so the deleted bases are 166,012,371-166,012,738 and htslib computes the record end as 166,012,738 [verified: test]. `SVCLAIM=DJ` (depth dip plus split-read junction) is **required**: VCF 4.4/4.5 say that for DEL/DUP "SVCLAIM must be specified and can be D, J, or DJ" (§3) [verified: spec]. Its FORMAT is only `GT`, which is legal because FORMAT is chosen per record. |
 | Record 3 | **Inherited indel.** `TTC -> T` at the anchor T (166,013,043) deletes the `TC` at 166,013,044-045 inside a `TCTCTCTC` repeat. The child and mother are `0/1`, so the child inherited it from the mother. |
 
 ### 3.2 Meta-information lines (§1.4)
@@ -115,7 +118,7 @@ chr2	166013043	.	TTC	T	233.1	PASS	AC=2;AN=6;DP=96	GT:AD:DP:GQ:PL	0/1:15,16:31:99
 - **FILTER:** `ID, Description`. **ALT:** `ID, Description`. SV ID first levels are `DEL, INS, DUP, INV, CNV`, with optional subtypes such as `DUP:TANDEM`, `INS:ME`, `CNV:TR`.
 - **contig:** `ID` plus reserved `length`, `md5` (the SAM-style MD5), `URL`. Names follow the SAM rule `[0-9A-Za-z!#$%&+./:;?@^_|~-][0-9A-Za-z!#$%&*+./:;=?@^_|~-]*` (4.3+).
 - **PEDIGREE:** `##PEDIGREE=<ID=Child,Father=F,Mother=M>`, or `Original=` for clonal derivation (tumour from germline), or `##pedigreeDB=URL`.
-- **Other defined lines:** `##SAMPLE`, `##META` (added in 4.3), `##assembly` (a FASTA of breakpoint assemblies).
+- **Other defined lines:** `##SAMPLE` (already in 4.1/4.2), `##META` (added in 4.3), `##assembly` (a FASTA of breakpoint assemblies).
 - **Meta lines are optional**, but must be well-formed if present. BCF requires every used tag and contig to be declared (§1.4). htslib behaves accordingly: it *warns* on undeclared tags while reading VCF and *refuses* to write BCF ("Unchecked error (2 Tag not defined in header)") [verified: test].
 
 ### 3.3 The eight fixed columns (§1.6.1)
@@ -155,14 +158,14 @@ Reserved INFO keys include `AA, AC(A), AD(R), AF(A), AN, DB, DP, END, H2, H3, MQ
 | `R` | n+1 (REF first) | `AD=17,18,0` |
 | `G` | C(n+P, P), one per genotype | `PL` has 6 values |
 | `.` | varies / unknown | `CIPOS` |
-| `LA`, `LR`, `LG`, `P`, `M` | 4.5 FORMAT only: local alleles, per GT allele, base modifications | `LPL`, `PSL`, `M5mC` |
+| `LA`, `LR`, `LG`, `P`, `M` | FORMAT only, added in 4.5: local alleles, per GT allele, base modifications. `P` was also back-added to 4.4 as an erratum for PSL/PSO. | `LPL`, `PSL`, `M5mC` |
 
 **Genotype order for G fields (§1.6.2, "Genotype Ordering").** Diploid `a/b` with a ≤ b sits at index `b(b+1)/2 + a`. For n = 1 the order is `00,01,11`. For n = 2 it is `00,01,11,02,12,22`. Triploid with n = 2 gives 10 values.
 
 **Reserved FORMAT keys you will meet:**
 
 - `AD` (R), `DP`, `GQ`, `PL` and `GL` (G), `FT` (per-sample filter), `PS` (phase set).
-- `GQ` is "conditional genotype quality", `-10log10 P(genotype call is wrong | site is variant)`. GATK computes it as the difference between the two smallest PLs (= the second-smallest PL, since PLs are normalized so the best is 0) and caps it at 99 [verified: source, `calculateGQFromPLs`].
+- `GQ` is "conditional genotype quality", `-10log10 P(genotype call is wrong | site is variant)`. GATK computes it as the difference between the two smallest PLs (= the second-smallest PL, since PLs are normalized so the best is 0) [verified: source, `GATKVariantContextUtils.calculateGQFromPLs`, which itself does **not** cap]. GATK output caps GQ at 99: "GQ values are capped at 99 in the GATK" (`HaplotypeCallerArgumentCollection` javadoc; `VCFConstants.MAX_GENOTYPE_QUAL = 99` in htsjdk) [verified: source].
 - 4.5 additions: `LEN` (length of a `<*>` block), and `LAA/LAD/LPL` (local alleles).
 
 ### 3.5 Allele grammar: anchor bases, multiallelics, `*`, symbolic alleles, breakends
@@ -182,6 +185,7 @@ Reserved INFO keys include `AA, AC(A), AD(R), AF(A), AN, DB, DP, END, H2, H3, MQ
 - POS is the base *before* the event, and a padding base is required.
 - In 4.4+, `SVLEN` "must be specified" and is positive. In 4.2/4.3, SVLEN was the length difference, negative for deletions (`SVLEN=-205` with `END`).
 - In 4.5, `END` is deprecated and computed. 4.4 added `SVCLAIM` (D = depth/abundance, J = junction, DJ = both) and deprecated `SVTYPE`.
+- In 4.4+, **`<DEL>` and `<DUP>` must carry `SVCLAIM`** ("SVCLAIM must be specified and can be D, J, or DJ"). For `<CNV>` it is optional (D or `.`), for `<INV>`/`<INS>` optional (J, DJ or `.`), and for breakends optional (J or `.`) [verified: spec §3]. The spec's own §5.3 example writes `T <DEL> ... SVLEN=2;SVCLAIM=DJ`. htslib does not check it.
 - htslib 1.24 derives the same end (166,012,738) from `SVLEN=368`, `SVLEN=-368` or `END` under either version header [verified: test].
 - With **no** SVLEN or END, htslib gives the `<DEL>` a 1-bp extent, so an indexed query of chr2:166012500-166012600 *misses* it [verified: test].
 
@@ -196,7 +200,7 @@ Reserved INFO keys include `AA, AC(A), AD(R), AF(A), AN, DB, DP, END, H2, H3, MQ
 | `]p]t` | piece extending to the left of p is joined before t |
 | `[p[t` | reverse-complemented piece extending right of p is joined before t |
 
-The case deletion written as breakends. It is valid and REF-checked when the §3.1 header also declares `##INFO=<ID=MATEID,Number=A,Type=String,Description="ID of mate breakend">`; without that line, htslib warns and BCF output fails [verified: test, GRCh38]:
+The case deletion written as breakends (SVCLAIM is optional for breakends). It is valid and REF-checked when the §3.1 header also declares `##INFO=<ID=MATEID,Number=A,Type=String,Description="ID of mate breakend">`; without that line, htslib warns and BCF output fails [verified: test, GRCh38]:
 
 ```
 chr2	166012370	bnd_L	T	T[chr2:166012739[	.	PASS	MATEID=bnd_R	GT	0/1	0/0	0/0
@@ -235,12 +239,12 @@ chr2	166009960	.	A	<NON_REF>	.	.	END=166010040	GT:DP:GQ:MIN_DP:PL	0/0:33:75:25:0
   - The GATK3-era FAQ example used bands [5, 20, 60] [verified: source, gatk-docs].
   - `--floor-blocks` writes the band floor as GQ and drops PL and MIN_DP.
 - **`-ERC BP_RESOLUTION`** writes one record per position instead of blocks.
-- **Zero coverage still writes `0/0`.** GATK's FAQ example ends with a block of `0/0:44:0:44:0,0,0`. In joint genotyping, a hom-ref with **GQ 0 becomes `./.`**, and with DP 0 a bare `./.` ("in the 'no data' case set to plain no-call") [verified: source, `GATKVariantContextUtils.makeGenotypeCall`].
+- **`0/0` is written even with no confidence.** GATK's FAQ example ends with `0/0:44:0:44:0,0,0` (GT:DP:GQ:MIN_DP:PL). That is **44 reads** and GQ 0 right after an insertion, not zero coverage. The FAQ block also contains `0/0:49:0:48:0,0,1282` [verified: source, gatk-docs FAQ]. Zero-coverage stretches are written as `0/0:0:0:0:0,0,0` [from memory - verify]. In joint genotyping, a hom-ref with **GQ 0 becomes `./.`**, and with DP 0 a bare `./.` ("in the 'no data' case set to plain no-call") [verified: source, `GATKVariantContextUtils.makeGenotypeCall`; `GenotypeGVCFsEngine`].
 
 **(b) VCF 4.5 standard form.** `<*>` replaces `<NON_REF>`, and the per-sample `FORMAT LEN` replaces `INFO END`. That allows blocks of different lengths for different samples in a multi-sample file.
 
 - A missing LEN is inferred from END.
-- In a multi-sample file, positions already covered by a sample's earlier `<*>` block must show GT `.` for that sample.
+- In a multi-sample file, positions already covered by a sample's earlier `<*>` block must show GT `.` for that sample, with no FORMAT fields other than `LAA` (§5.5).
 - htslib 1.24 honours LEN: `chr2 166009951 T <*> ... GT:DP:GQ:LEN 0/0:28:84:20` gives rlen 20 and end 166,009,970 [verified: test].
 
 **(c) Illumina (Strelka/Isaac) gVCF.**
@@ -259,18 +263,20 @@ chr2	166009901	.	T	.	.	PASS	END=166009958;BLOCKAVG_min30p3a	GT:GQX:DP:DPF:MIN_DP
 1. **Hom-ref versus no data.** Merging variants-only VCFs cannot tell a sample that is hom-ref from one with no reads. GATK's retired joint-calling article calls this "Clearer distinction between homozygous reference sites and sites with missing data" [verified: source, gatk-docs].
 2. **The N+1 problem.** Multi-sample calling from BAMs means that "every time you get even one new sample... you have to re-call all samples from scratch". With gVCFs, you call only the new sample and rerun the cheap GenotypeGVCFs step [verified: source, gatk-docs].
 
-**What joint genotyping does.** `bcftools merge --gvcf` (a CombineGVCFs analogue) on the three trio gVCFs splits every sample's blocks at the child's variant. The parents' block likelihoods are carried onto the new allele [verified: test]:
+**What joint genotyping does.** `bcftools merge --gvcf` (a CombineGVCFs analogue) on the three trio gVCFs splits every sample's blocks at the child's variant. Each parent's block PLs are re-indexed onto the three-allele record `C,T,<NON_REF>` [verified: test, bcftools 1.24 output reproduced exactly]:
 
 ```
 chr2	166009951	.	T	<NON_REF>	.	.	END=166009958	GT:DP:GQ:MIN_DP:PL	0/0:34:90:30:0,90,1350	0/0:38:99:31:0,99,1485	0/0:28:84:26:0,84,1260
 chr2	166009959	.	C	T,<NON_REF>	512.3	.	DP=35	GT:AD:DP:GQ:PL:MIN_DP	0/1:17,18,0:35:99:520,0,480,571,534,1105:.	0/0:.:38:99:0,1485,1485,99,1485,1485:31	0/0:.:28:84:0,1260,1260,84,1260,1260:26
 ```
 
-GenotypeGVCFs then, by default, keeps only sites that are variant after genotyping (`--include-non-variant-sites` keeps the rest) [verified: source]. It writes the ALT without `<NON_REF>` [from memory - verify], which gives record 1 of §3.1.
+**Caution on the merged PLs.** bcftools filled the parents' `0/T` slot with 1485, not with their `0/<NON_REF>` value of 99. GATK's merger instead maps any allele a sample lacks to that sample's `<NON_REF>` likelihoods ("using the `<NON-REF>` allele whenever such a mapping doesn't exist"). For the mother that gives `0,99,1485,99,1485,1485` [verified: source, `AlleleSubsettingUtils.getIndexesOfRelevantAllelesForGVCF`]. Do not teach a GQ computed from the bcftools-merged PLs.
+
+GenotypeGVCFs then, by default, keeps only sites that are variant after genotyping (`--include-non-variant-sites` keeps the rest) [verified: source]. It drops `<NON_REF>` from the ALT unless it would be the only ALT allele [verified: source, `GenotypingEngine.java`, "keep the NON_REF symbolic allele but only in the absence of a non-symbolic allele"]. That gives record 1 of §3.1, whose parent PLs (`0,99,1485`, `0,84,1260`) match GATK's mapping.
 
 ### 3.7 PED file (trio tools)
 
-A PED file is whitespace-delimited (GATK accepts spaces or tabs) with six mandatory columns: Family ID, Individual ID, Paternal ID, Maternal ID, Sex (1 = male, 2 = female, other = unknown), Phenotype (-9/0 missing, 1 unaffected, 2 affected). Parent ID `0` means not in the dataset [verified: source, gatk-docs "Pedigree / PED files"]. `bcftools +mendelian2 -P` reads `<ignored>,proband,father,mother,sex` [verified: source].
+A PED file is whitespace-delimited (GATK accepts spaces or tabs) with six mandatory columns: Family ID, Individual ID, Paternal ID, Maternal ID, Sex (1 = male, 2 = female, other = unknown), Phenotype (-9/0 missing, 1 unaffected, 2 affected). Columns, delimiters and codes: [verified: source, gatk-docs "Pedigree / PED files"]. Parent ID `0` means "not in the dataset". That is the PLINK convention: the GATK page's example uses `0` but does not define it [from memory - verify against PLINK docs]. `bcftools +mendelian2 -P` reads `<ignored>,proband,father,mother,sex` [verified: source].
 
 ```
 FAM01	CHILD	FATHER	MOTHER	1	2
@@ -315,21 +321,21 @@ Severity: **error** = the spec says MUST (or the format cannot be parsed or inde
 | VCF-S03 | INFO/FORMAT lines have ID, Number, Type, Description; FILTER/ALT have ID, Description; Flag has Number=0; Description is quoted | §1.4.2-1.4.5 | `##INFO=<ID=DB,Number=1,Type=Flag,...>` | error | n/t |
 | VCF-S04 | Exactly one `#CHROM` line: the 8 fixed names in order, then `FORMAT` + sample IDs, tab-separated | §1.5 (4.5 "clarified mandatory") | header joined by spaces | error | "Could not parse the "#CHROM.." line ... spaces are present instead of tabs" |
 | VCF-S05 | Sample IDs unique | §1.5 | `CHILD MOTHER MOTHER` | error | "Duplicated sample name 'MOTHER'" |
-| VCF-S06 | Data lines are tab-delimited: 8 fixed fields, and with samples, FORMAT + exactly one column per sample | §1.6 | father column missing | error | "Number of columns ... does not match the number of samples (2 vs 3)". A 7-column line gives "truncated file" |
+| VCF-S06 | Data lines are tab-delimited: 8 fixed fields, and with samples, FORMAT + exactly one column per sample | §1.6 | father column missing | error | "Number of columns ... does not match the number of samples (2 vs 3)". A 7-column line: bcftools "VCF parse error" (no specific message); pysam raises "truncated file" |
 | VCF-S07 | No empty fields; missing is `.` | §1 intro; explicit 4.3+ | `PASS		GT` (empty INFO) | error (spec) | **accepted**, rewritten as `.` |
-| VCF-S08 | No trailing tab; last line ends with a newline | §1.5-1.6, 4.3+ | `...0/0:0,84,1260	` | error (spec) | **accepted** |
+| VCF-S08 | No trailing tab; last line ends with a newline | §1.5-1.6, 4.3+ | `...0/0:28,0:28:84:0,84,1260	` (trailing TAB) | error (spec) | **accepted** |
 | VCF-S09 | POS is an integer ≥ 1 (0 or N+1 only for telomeric breakends) | §1.6.1 | `chr2	0	.	C	T...` | error | accepted. Only tabix warns: "Coordinate <= 0 detected" |
 | VCF-S10 | REF uses only A,C,G,T,N (any case); ALT alleles are bases, `*`, `.`, `<ID>`, `<*>` or breakend strings | §1.6.1 items 4-5 | ALT `-` | error | read OK; `norm`: "Non-ACGTN alternate allele" |
 | VCF-S11 | QUAL is a Float or `.` | §1.6.1 item 6 | QUAL `high` | error | **silently becomes 0** |
-| VCF-S12 | FILTER is `PASS`, `.`, or `;`-list of declared IDs; `0` reserved | §1.6.1 item 7 ("must" since 4.3) | FILTER `0` | error | warns; BCF write fails |
+| VCF-S12 | FILTER is `PASS`, `.`, or a `;`-list of filter IDs; `0` is reserved ("must not be used" since 4.3; "should not" in 4.2). Declaring the IDs is only recommended (see VCF-M03) | §1.6.1 item 7 | FILTER `0` | error | warns; BCF write fails |
 | VCF-S13 | INFO keys match the regex, have no duplicates, and a Flag has no value | §1.6.1 item 8 (regex and duplicates 4.3+) | `DP=101;DP=99`; `DB=1` | error | **accepted**; keeps the first DP; accepts `DB=1` |
-| VCF-S14 | FORMAT keys are unique and **GT first** | §1.6.2 (GT-first in every 4.x) | `AD:GT` | error | **accepted, genotypes silently lost** (pysam GT = `()`) |
+| VCF-S14 | FORMAT keys are unique and **GT first** | §1.6.2 (GT-first in every 4.x) | `AD:GT` | error | **accepted silently.** bcftools still parses GT (`query '[%GT]'`, `-i 'GT[1]="AA"'` and the BCF round trip all work), but pysam's `sample['GT']` returns `()`. htsjdk (GATK, IGV) rejects it: "Saw GT field at position 1, but it must be at the first position" |
 | VCF-S15 | A sample column has no more subfields than FORMAT keys | §1.6.2 | `0/1:17,18:35:99:520,0,480:7` | error | "Incorrect number of FORMAT fields" |
 | VCF-S16 | GT syntax is allele indices or `.` joined by `/` or `\|` (4.4+ allows a leading indicator) | §1.6.2 GT | `0-1`; `0/1/` | error | "Invalid character '-' in 'GT'"; "Couldn't read GT data" |
 | VCF-S17 | Values match Type: Integer is 32-bit signed, minus -2^31..-2^31+7; Float follows the regex | §1.3 | `DP=10.5` (Integer) | error | **silently truncated to 10** |
 | VCF-S18 | Value count matches Number (A, R, G, k) | §1.4.2 | `AD=17,18,3` at a biallelic site | error | **not checked** |
 | VCF-S19 | Contig names match the SAM-style regex and are not reserved symbolic names | §1.4.7 (4.3+; 2019 change) | `##contig=<ID=<DEL>>` | error | n/t |
-| VCF-S20 | UTF-8, no BOM, no disallowed control characters; special characters percent-encoded | §1.2 (4.3+) | `NOTE=a;b` inside a value | error | n/t |
+| VCF-S20 | UTF-8, no BOM, no disallowed control characters; special characters percent-encoded | §1.2 (4.3+) | a UTF-8 BOM (`EF BB BF`) before `##fileformat`. (A literal `;` inside a value such as `NOTE=a;b` cannot be detected: it parses as a valid key `NOTE=a` plus a Flag `b`.) | error | n/t |
 
 "n/t" = not tested.
 
@@ -346,7 +352,8 @@ Severity: **error** = the spec says MUST (or the format cannot be parsed or inde
 | VCF-M07 | ALT alleles differ from REF and from each other | §1.6.1 item 5 | `C	C` | error | `norm`: "Duplicate alleles at chr2:166009959" |
 | VCF-M08 | GT indices ≤ number of ALT alleles | §1.6.2 | `0/2` with one ALT | error | **accepted**; pysam returns `(0, None)` |
 | VCF-M09 | A/R/G arrays agree with the ALT count and ploidy; PL zero at the called genotype (GATK) | §1.6.2 genotype ordering | 3 PL values with 2 ALTs | error / warning | not checked |
-| VCF-M10 | Symbolic SV alleles carry SVLEN (4.4+ "must"; positive); END, if present, equals the computed end | §3 (SVLEN, END) | `T	<DEL>` with no SVLEN | error (4.4+) | accepted; **indexed as 1 bp, missed by region queries** |
+| VCF-M10 | Symbolic SV alleles carry SVLEN (4.4+ "must"; positive); END, if present, equals the computed end | §3 (SVLEN, END) | `T	<DEL>` with SVCLAIM but no SVLEN | error (4.4+) | accepted; **indexed as 1 bp, missed by region queries** |
+| VCF-M17 | `<DEL>`/`<DUP>` carry `SVCLAIM` = D, J or DJ. For `<CNV>`, SVCLAIM is optional and only D or `.`; for `<INV>`/`<INS>`, optional and J, DJ or `.`; for breakends, optional and J or `.` | §3 (SVCLAIM; 4.4+) | `T	<DEL>	...	SVLEN=368` with no SVCLAIM | error (4.4+) | not checked (accepted silently) |
 | VCF-M11 | Breakend mates point at each other (MATEID), with consistent positions and brackets | §5.4 | `bnd_L` ALT points to 166012740 but its mate sits at 166012739 | error | n/t |
 | VCF-M12 | `*` appears only where an upstream deletion overlaps | §1.6.1 item 5 (4.2+) | `*` at a site with no overlapping deletion | warning | n/t |
 | VCF-M13 | Ploidy fits sex and region (haploid on male non-PAR X, Y, MT) | §1.6.2 GT ("should") | `0/1` on male chrX non-PAR | warning | n/t |
@@ -376,8 +383,8 @@ Severity: **error** = the spec says MUST (or the format cannot be parsed or inde
 | GVCF-S03 | `MIN_DP` declared as FORMAT; GQ bands declared as `##GVCFBlock` lines | GATK source | `MIN_DP` used undeclared | convention |
 | GVCF-M01 | Records tile the processed intervals without gaps or overlaps (a deletion may span following positions) | GATK `GVCFBlockCombiner` | a gap 166009951-166009970 between blocks: "not processed" ≠ hom-ref | warning |
 | GVCF-M02 | A block's GQ lies in one declared band and is the minimum; DP is the median; `MIN_DP ≤ DP` | GATK `HomRefBlock` | `GQ=99` with `PL=0,90,1350` | warning |
-| GVCF-M03 | `0/0` with GQ 0 (or DP 0, PL `0,0,0`) is **no evidence**, not hom-ref. GenotypeGVCFs emits `./.` | GATK `makeGenotypeCall` [verified: source] | treating `0/0:0:0:0:0,0,0` as a confident parent call | error (interpretation) |
-| GVCF-M04 | VCF 4.5 multi-sample: a sample's positions covered by its earlier `<*>` block have GT `.` in later overlapping records; missing LEN is inferred from END | 4.5 §5.5 | a sample `0/0` at a position already inside its own block | error (4.5) |
+| GVCF-M03 | `0/0` with GQ 0 is **not evidence of hom-ref**, even with many reads (the FAQ shows `0/0:44:0:44:0,0,0`); DP 0 means no data at all. GenotypeGVCFs emits `./.` | GATK `makeGenotypeCall`, `GenotypeGVCFsEngine` [verified: source] | treating `0/0:0:0:0:0,0,0` or `0/0:44:0:44:0,0,0` as a confident parent call | error (interpretation) |
+| GVCF-M04 | VCF 4.5 multi-sample: a sample's positions covered by its earlier `<*>` block have GT `.` and no FORMAT fields other than `LAA` in later overlapping records; missing LEN is inferred from END | 4.5 §5.5 | a sample `0/0` at a position already inside its own block | error (4.5) |
 | GVCF-C01 | Only HaplotypeCaller (or compatible) gVCFs feed GenotypeGVCFs. UnifiedGenotyper `EMIT_ALL_SITES` and Strelka gVCFs "look superficially like" them but lack reference-confidence likelihoods | GATK FAQ and CombineGVCFs javadoc | Illumina block (ALT `.`) passed to CombineGVCFs | convention (tool-enforced) |
 | GVCF-C02 | One sample per HaplotypeCaller gVCF. Multi-sample gVCFs come from CombineGVCFs; GenomicsDB workspaces serve large cohorts | GATK javadoc | n/a | convention |
 
@@ -425,19 +432,19 @@ A PED file looks like a 6-column table with `0` placeholders and sex/phenotype c
 ## 7. Common misconceptions and real-world pitfalls
 
 1. **"No line means homozygous reference."** It may mean zero reads. Only a gVCF block, or GQ/DP in a joint VCF, can show the parent is hom-ref.
-2. **"`0/0` in a gVCF means confidently reference."** GATK writes `0/0:0:0:0:0,0,0` for zero-coverage stretches. Read GQ and MIN_DP. GenotypeGVCFs turns GQ-0 hom-refs into `./.`.
+2. **"`0/0` in a gVCF means confidently reference."** GATK writes `0/0` even at GQ 0. The FAQ example has `0/0:44:0:44:0,0,0`: 44 reads, no confidence [verified: source, gatk-docs]. Zero-coverage stretches come out as `0/0:0:0:0:0,0,0` [from memory - verify]. Read GQ and MIN_DP. GenotypeGVCFs turns GQ-0 hom-refs into `./.`.
 3. **"POS is where the indel starts."** POS is the anchor base, and the deletion starts at POS+1. Off-by-one in the other direction happens when converting to BED.
 4. **"Different coordinates mean different variants."** `166009976 TA T`, `166009977 AA A`, `166009981 AA A`, `166009982 AT T` and `166009976 TAAAAAAT TAAAAAT` are the same deletion. `bcftools norm -f` maps all of them to `166009976 TA T` [verified: test]. Normalize before comparing or annotating.
-5. **"A file that loads is valid."** htslib 1.24 silently turned `QUAL=high` into 0, truncated `DP=10.5` to 10, ignored GT when it was not first, and accepted `0/2` at a biallelic site and wrong-length AD/PL arrays [verified: test]. Validate against the spec and the reference.
+5. **"A file that loads is valid."** htslib 1.24 silently turned `QUAL=high` into 0, truncated `DP=10.5` to 10, accepted a GT that was not first (pysam then returned empty genotypes, while htsjdk/GATK reject the line), and accepted `0/2` at a biallelic site and wrong-length AD/PL arrays [verified: test]. Validate against the spec and the reference.
 6. **`.` versus `PASS` in FILTER.** `.` means *no filters were applied*, not "passed".
 7. **QUAL versus GQ.** QUAL is site-level: is there any ALT here? GQ is per sample and *conditional* on the site being variant. A high-QUAL site can hold a low-GQ parent.
 8. **`*` versus `<*>`.** `*` is "deleted by an upstream deletion". `<*>`/`<NON_REF>` is "any unobserved allele" in reference-confidence records.
 9. **After a multiallelic split, `0` means "not this ALT".** A mother who is `0/2` becomes `0/0` in the split ALT-1 record [verified: test].
-10. **Version drift.** SVLEN for deletions is negative in 4.2/4.3 and positive from 4.4. `END` is deprecated in 4.5. `<NON_REF>` became an alias of `<*>` only in 4.5. Check the `##fileformat` line before interpreting.
+10. **Version drift.** SVLEN for deletions is negative in 4.2/4.3 and positive from 4.4. From 4.4, `<DEL>`/`<DUP>` must carry `SVCLAIM`. `END` is deprecated in 4.5. `<NON_REF>` became an alias of `<*>` only in 4.5. Check the `##fileformat` line before interpreting.
 11. **`chr2` versus `2`, and GRCh37 versus GRCh38.** Wrong builds give REF mismatches or silent empty intersections. `bcftools +mendelian2 --rules` defaults to **GRCh37** PAR rules, so pass `--rules GRCh38` [verified: source].
 12. **gzip is not bgzip, and a stale index lies.** Re-bgzip and re-index after every edit.
 13. **INFO `AF` is the cohort's frequency** (here, the trio), not the population frequency. Population rarity comes from gnomAD annotation.
-14. **Sample columns are just names.** A swapped PED or a sample mix-up creates genome-wide Mendelian errors, not one de novo.
+14. **Sample columns are just names.** A sample mix-up, or a PED that names the wrong sample as the child, creates genome-wide Mendelian errors, not one de novo. Swapping only the mother and father labels does **not**: autosomal trio checks are symmetric in the two parents. That swap shows up only on chrX in a male child, in a sex check against the PED sex column, and in parent-of-origin statements.
 15. **GQ/DP filters drop records without those fields.** A trio filter on `FMT/GQ` and `FMT/DP` returned the SNV but silently dropped the GT-only `<DEL>`, which is the child's actual de novo deletion [verified: test]. SVs need their own filter path.
 16. **Phred intuition.**
     - GQ 20 means a 1% chance the genotype is wrong.
@@ -485,7 +492,7 @@ Use the §3.1 header. The file loads in htslib without a single error.
 ```
 chr2	166009959	.	C	T	512.3	PASS	AC=1;AN=6;DP=101	GT:AD:DP:GQ:PL	0/1:17,18:35:99:520,0,480	0/0:38,0:38:99:0,99,1485	0/0:28,0:28:84:0,84,1260
 chr2	166011200	.	G	C	48.2	PASS	AC=1;AN=6	GT	0/1	0/0	0/0
-chr2	166012370	.	T	<DEL>	.	PASS	AC=1;AN=6	GT	0/1	0/0	0/0
+chr2	166012370	.	T	<DEL>	.	PASS	AC=1;AN=6;SVCLAIM=DJ	GT	0/1	0/0	0/0
 chr2	166013043	.	TTC	T	233.1	PASS	AC=2;AN=6;DP=96	GT:AD:DP:GQ:PL	0/1:15,16:31:99:240,0,310	0/2:19,17:36:99:228,0,390	0/0:29,0:29:87:0,87,1305
 chr2	166014200	.	C	T	high	PASS	AC=1;AN=4	GT	0/1	0/0	./.
 chr2	166015500	.	A	G	640.2	PASS	AC=2;AN=6	AD:GT	30,0:0/0	0,34:1/1	29,0:0/0
@@ -493,11 +500,11 @@ chr2	166015500	.	A	G	640.2	PASS	AC=2;AN=6	AD:GT	30,0:0/0	0,34:1/1	29,0:0/0
 
 - **Answer:** line 1 is valid. Each of the others has one error:
   - **Line 2:** REF `G`, but GRCh38 has `T` (VCF-M01; only `norm --check-ref` catches it).
-  - **Line 3:** `<DEL>` without SVLEN (VCF-M10; its extent becomes 1 bp).
+  - **Line 3:** `<DEL>` without SVLEN (VCF-M10; its extent becomes 1 bp). It carries SVCLAIM, so that is its only error (VCF-M17).
   - **Line 4:** mother `0/2` with only one ALT (VCF-M08).
   - **Line 5:** QUAL `high` (VCF-S11; htslib stores 0).
-  - **Line 6:** GT not first (VCF-S14; genotypes silently lost).
-- **Explanation:** these are all [verified: test]. The lesson is that tolerant parsers are not validators.
+  - **Line 6:** GT not first (VCF-S14; bcftools still reads it, pysam returns empty genotypes, GATK/htsjdk rejects the line).
+- **Explanation:** these are all [verified: test]. The lesson is that tolerant parsers are not validators. (Bonus observation: `bcftools norm -f ... --check-ref w` on this file "realigns" the SVLEN-less `<DEL>` to `chr2 1 . N <DEL>` [verified: test]. A missing length can corrupt downstream tools.)
 
 **EX-06 · fix-it · make it index**
 
@@ -562,12 +569,14 @@ chr2	166015500	.	A	G	640.2	PASS	.	GT:DP:GQ	0/0:30:90	1/1:34:99	0/0:29:87
 
 | Site | Bin | Why |
 |---|---|---|
-| 959 | high-confidence de novo | All three GQ ≥ 20 (GATK hiConfDeNovo rule) |
-| 200 | low-confidence de novo | Child GQ 15: ≥ 10 but < 20 (loConfDeNovo); DP 9 |
-| 500 | Mendelian violation | A `0/1 × 0/0` mating cannot give `1/1`. The site lies inside the child's 166,012,371-738 deletion, so the child is *hemizygous* for the maternal G at half depth (14). The paternal chromosome carries the deletion. |
-| 043 | inherited | Maternal; consistent |
-| 200 (166,014,200) | insufficient evidence | The father has no call |
-| 500 (166,015,500) | Mendelian violation | A `1/1` mother must transmit G. Suspect a sample swap, a genotyping error, or a maternal deletion |
+| 166,009,959 | high-confidence de novo | All three GQ ≥ 20 (GATK hiConfDeNovo rule) |
+| 166,011,200 | low-confidence de novo | Child GQ 15: ≥ 10 but < 20 (loConfDeNovo); DP 9 |
+| 166,012,500 | Mendelian violation | A `0/1 × 0/0` mating cannot give `1/1`. The site lies inside the child's 166,012,371-738 deletion, so the child is *hemizygous* for the maternal G at half depth (14). The paternal chromosome carries the deletion. |
+| 166,013,043 | inherited | Maternal; consistent |
+| 166,014,200 | insufficient evidence | The father has no call |
+| 166,015,500 | Mendelian violation | A `1/1` mother must transmit G. Suspect a sample mix-up, a genotyping error, or a maternal deletion |
+
+(The canonical case in `case.md` §10.2 replaces the 166,012,500 "hemizygous `1/1`" with a hemizygous `0/0` at rs2298771, father `1/1`.)
 
 **EX-09 · simulator (breakend decoder) · build the junction**
 
@@ -583,7 +592,7 @@ The learner commits a guess for each edit before revealing htslib's actual behav
 |---|---|
 | (a) `QUAL=high` | silently 0 |
 | (b) `DP=10.5` in an Integer field | truncated to 10 |
-| (c) `DP=101;DP=99` | first value kept |
+| (c) `DP=101;DP=99` | first value kept when parsed (`bcftools query`, pysam); `bcftools view` echoes both unchanged |
 | (d) spaces in the `#CHROM` line | hard error |
 | (e) records out of order | read OK, indexing fails |
 | (f) undeclared INFO key | warning, BCF write fails |
@@ -604,11 +613,11 @@ Bin these into *GATK gVCF*, *VCF 4.5 gVCF*, *Illumina gVCF*, *plain VCF*, *not V
 1. `bgzip trio.vcf && tabix -p vcf trio.vcf.gz` ✓
 2. `gzip trio.vcf && tabix -p vcf trio.vcf.gz`: plain gzip is not BGZF [verified: test].
 3. `bcftools view -Oz -o trio.vcf.gz trio.vcf && bcftools index -t trio.vcf.gz` ✓
-4. `sort trio.vcf | bgzip > x.gz && tabix -p vcf x.gz`: plain `sort` compares POS as text (`99` after `166009959`). In non-C locales it also ignores `#` when collating, so header lines can land among records [from memory - verify]. Use `bcftools sort`.
+4. `sort trio.vcf | bgzip > x.gz && tabix -p vcf x.gz`: plain `sort` compares POS as text (`99` after `166009959`), and tabix fails with "Unsorted positions on sequence #1: 166013043 followed by 99". Even with `LC_ALL=C`, it also alphabetizes the `##` lines, so `##fileformat` is no longer line 1 and htslib reports "unknown file type" [verified: test]. Non-C locales may also ignore `#` when collating [from memory - verify]. Use `bcftools sort`.
 
 ## 9. Quiz bank
 
-**Q1.** A deletion of 368 bp is written `chr2 166012370 . T <DEL> . PASS SVLEN=368`. Which bases are deleted (1-based)?
+**Q1.** A deletion of 368 bp is written `chr2 166012370 . T <DEL> . PASS SVLEN=368;SVCLAIM=DJ`. Which bases are deleted (1-based)?
 
 - a) 166,012,370-166,012,737. *That includes the anchor; POS is the base before.*
 - **b) 166,012,371-166,012,738** ✓ *Symbolic SVs start after POS.*
@@ -643,9 +652,9 @@ Bin these into *GATK gVCF*, *VCF 4.5 gVCF*, *Illumina gVCF*, *plain VCF*, *not V
 - c) Every site failed. *Failures list filter IDs.*
 - d) The file is invalid. *`.` is legal.*
 
-**Q6.** A VCF loads in IGV and pysam without warnings. A strict validator flags the GT of 300 samples. Most likely cause?
+**Q6.** A VCF loads in bcftools and pysam without warnings, but pysam reports empty genotypes. A strict validator flags the GT of 300 samples. Most likely cause?
 
-- **a) FORMAT lists `AD:GT...`. GT is not first, so htslib silently drops the genotypes** ✓
+- **a) FORMAT lists `AD:GT...`. GT is not first, which the spec forbids. htslib accepts it silently, pysam's GT accessor then returns `()`, and htsjdk-based tools (GATK, IGV) reject the line** ✓ [verified: test; htsjdk `AbstractVCFCodec`]
 - b) The CRLF line endings. *They are legal in 4.3+ and htslib accepts them.*
 - c) Phased `|` genotypes. *They are legal.*
 - d) The missing `##FILTER=<ID=PASS>` line. *PASS need not be declared.*
@@ -659,7 +668,7 @@ Bin these into *GATK gVCF*, *VCF 4.5 gVCF*, *Illumina gVCF*, *plain VCF*, *not V
 
 **Q8.** The child is `1/1` at chr2:166,012,500 (DP 14), the mother `0/1`, the father `0/0`. The same region shows half coverage in the child. Best interpretation?
 
-- a) A homozygous de novo SNV. *That needs two independent mutations.*
+- a) A homozygous de novo SNV. *The mother already carries G, so this would need a new mutation on the paternal copy that creates exactly the same base (on the order of 10^-8 per base per generation). It also would not explain the half coverage.*
 - **b) A Mendelian violation explained by a paternal-chromosome deletion: the child is hemizygous for the maternal allele** ✓ *It fits the `<DEL>` and the WIG dip.*
 - c) Contamination. *Foreign reads push calls toward heterozygous; they do not create a clean hom-alt at half depth.*
 - d) A sample swap. *A swap would cause violations genome-wide, not in one 368-bp window.*
@@ -670,7 +679,7 @@ Bin these into *GATK gVCF*, *VCF 4.5 gVCF*, *Illumina gVCF*, *plain VCF*, *not V
 - **Joint genotyping beat.** Show `bcftools merge --gvcf` splitting blocks at the child's variant (§3.6), then the final trio VCF (§3.1).
 - **De novo filter (VCF).**
   - The `bcftools view -i 'GT[0]="het" && GT[1]="RR" && GT[2]="RR" && FMT/GQ[0]>=20 && FMT/GQ[1]>=20 && FMT/GQ[2]>=20 && FMT/DP[1]>=10 && FMT/DP[2]>=10'` filter returns the SNV at 166,009,959 [verified: test].
-  - The twist: the same filter *drops* the `<DEL>` because it has no GQ/DP. The real lesson-ending finding is that the child also carries a de novo 368-bp deletion over target T3. It comes from the SV caller and agrees with the WIG dip and with EX-08's hemizygous `1/1`.
+  - The twist: the same filter *drops* the `<DEL>` because it has no GQ/DP. The real lesson-ending finding is that the child also carries a de novo 368-bp deletion over target T3. It comes from the SV caller and agrees with the WIG dip and with EX-08's hemizygous `1/1`. **Superseded:** `case.md` §10.2 makes the deletion 25,213 bp (POS 166,014,902), makes the SNV DN-2 at 166,009,887 (it fails on the father's GQ), and puts the true de novo SNV in *SCN9A*. Rebuild this beat from `case.md`.
 - **Handoff to GTF.** "chr2:166,009,959 C>T: so what?" Remember that SCN1A is on the minus strand, so the c. change is G>A. *The coordinate must be re-picked at build time to fall in a real SCN1A MANE exon, with the REF re-checked against GRCh38.*
 - **Handoff to BEDPE.** The breakend form of the deletion (§3.5) converts to the BEDPE row in `intervals-signals.md`. The anchor POS 166,012,370 equals the BED start.
 - **Handoff to PAF/GFA.** Long reads resolve whether the deletion is simple or part of a rearrangement. If it is complex, the VCF uses `EVENT`/`EVENTTYPE` to group breakends (4.4+).
@@ -680,7 +689,7 @@ Bin these into *GATK gVCF*, *VCF 4.5 gVCF*, *Illumina gVCF*, *plain VCF*, *not V
   - `father.all_sites.vcf` from UnifiedGenotyper `EMIT_ALL_SITES` (looks like a gVCF but is invalid for joint genotyping);
   - an Illumina gVCF (`BLOCKAVG_min30p3a`) mixed into the GATK set;
   - `annot.vcf` with `2` contigs against the `chr2` reference;
-  - a PED with mother and father swapped;
+  - a PED with mother and father swapped (autosomal Mendelian checks will not catch it; the PED sex column and chrX in a male child will);
   - a VCF with QUAL `high` that "loads fine".
 
 ## 11. "Read more" candidates
@@ -706,7 +715,7 @@ Bin these into *GATK gVCF*, *VCF 4.5 gVCF*, *Illumina gVCF*, *plain VCF*, *not V
 - **Mendelian rules on chrX for males** (`bcftools +mendelian2 -p 1X:`), and PAR coordinates per build.
 - **Spec errata worth a sidebar (master, 2026-10-16):**
   - In §5.3 the SV example puts `delbp2` at POS 2 with REF `A`. Given `chrA = ATGCGAAAAAAATGT`, the mate should be POS 5 with REF `G`. Its `<INS>` row gives REF `T` at POS 14, where the sequence has `G`.
-  - The §5.5 gVCF example has `...0,60,900;14` (a `;` where `:` belongs). Its 4396 row lists 6 FORMAT keys for 4 values.
+  - The §5.5 gVCF example has `...0,60,900;14` (a `;` where `:` belongs) in every block row. In its 4396 row (`GT:DP:GQ:MIN_DP:PL:LEN` with `0/0:24:52:0,52,95,66,95,97`), dropping trailing fields is legal, but MIN_DP was skipped, so the 6-value PL lands in the Number=1 `MIN_DP` slot.
   - Moral: even the spec's examples need a validator.
 
 ## 12. Sources
@@ -752,3 +761,84 @@ Bin these into *GATK gVCF*, *VCF 4.5 gVCF*, *Illumina gVCF*, *plain VCF*, *not V
 ### Not consulted
 
 - PLINK PED documentation (`zzz.bwh.harvard.edu/plink`; not attempted). PED columns were taken from the GATK PED article and the bcftools usage text.
+
+## Verification log
+
+Adversarial fact-check, 2026-10-16. The primary sources were re-fetched independently:
+
+- `hts-specs/master/VCFv4.5.tex`, `VCFv4.4.tex`, `VCFv4.3.tex`, `VCFv4.2.tex`, `tabix.tex`, `CSIv1.tex`;
+- GATK master source (`HomRefBlock`, `GVCFBlockCombiner`, `HaplotypeCallerArgumentCollection`, `GATKVariantContextUtils`, `GenotypeGVCFsEngine`, `GenotypingEngine`, `AlleleSubsettingUtils`, `ReferenceConfidenceVariantContextMerger`, `PossibleDeNovo`, `CombineGVCFs`, `GenotypeGVCFs`);
+- htsjdk master (`AbstractVCFCodec`, `GenotypeBuilder`, `VCFConstants`);
+- a fresh `git clone` of `gatk-docs`;
+- Strelka v2.9.x (`gvcf_options.*`, `gvcf_header.cpp`, `gvcf_writer.cpp`);
+- `bcftools/develop` (`doc/bcftools.txt`, `plugins/mendelian2.c`, `plugins/trio-dnm3.c`) and `htslib/develop/tabix.1`;
+- GRCh38 chr2:166,000,001-166,030,000 by HTTP byte range from the Broad `Homo_sapiens_assembly38.fasta`.
+
+Every snippet was re-run through pysam 0.24.1 (htslib/bcftools 1.24) against an N-padded chr2 built from that slice.
+
+### Corrections (claim -> correction -> source)
+
+1. §3.1 called the trio VCF "minimal valid" under `##fileformat=VCFv4.5`, but the `<DEL>` record had no `SVCLAIM`. -> VCF 4.4/4.5 say "DEL/DUP: SVCLAIM must be specified and can be D, J, or DJ". The fix adds the `##INFO=<ID=SVCLAIM...>` header line and `SVCLAIM=DJ`, adds rule VCF-M17, and updates §3.5, VCF-M10 and misconception 10. The fixed file still passes htslib parsing, BCF conversion, tabix, `bcftools index` and `norm --check-ref e`. -> VCFv4.5.tex §3 (SVCLAIM), §5.3 example (`SVLEN=2;SVCLAIM=DJ`); VCFv4.4.tex; test.
+2. EX-05 line 3 was keyed as having exactly one error (no SVLEN), but it also lacked SVCLAIM, which is a second 4.5 error. -> Line 3 now carries `SVCLAIM=DJ`, so missing SVLEN is its only error. The file still loads with no htslib message. Q1's record also gains `SVCLAIM=DJ`. -> VCFv4.5.tex §3; test.
+3. "GT not first -> htslib silently drops the genotypes" (VCF-S14, EX-05 line 6, misconception 5, Q6). -> htslib/bcftools keep GT: `bcftools query '[%GT ]'` prints `0/0 1/1 0/0`, `-i 'GT[1]="AA"'` matches, and the BCF round trip keeps it. Only pysam's `sample['GT']` returns `()`. htsjdk (GATK, IGV) throws "Saw GT field at position ..., but it must be at the first position". Q6's stem said the file loads in **IGV** without warnings, which is false for htsjdk, so the stem and key were rewritten. -> test; htsjdk `AbstractVCFCodec.java`.
+4. "Zero coverage still writes `0/0`. GATK's FAQ example ends with a block of `0/0:44:0:44:0,0,0`." -> In GT:DP:GQ:MIN_DP:PL that line has DP 44 and MIN_DP 44. It shows GQ 0 *with reads*, not zero coverage. §3.6, misconception 2 and GVCF-M03 were corrected. The `0/0:0:0:0:0,0,0` form for true zero coverage is now marked [from memory - verify]. -> gatk-docs `gatk3-faqs/What_is_a_GVCF...md`.
+5. GQ "caps it at 99 [verified: source, `calculateGQFromPLs`]". -> `calculateGQFromPLs` returns `second - first` with no cap. The cap is documented in the `HaplotypeCallerArgumentCollection` javadoc ("GQ values are capped at 99 in the GATK") and in `VCFConstants.MAX_GENOTYPE_QUAL = 99`. -> GATK and htsjdk source.
+6. §3.6: "The parents' block likelihoods are carried onto the new allele" (bcftools merge). -> The bcftools output was reproduced exactly, but bcftools sets the parents' `0/T` PL to 1485, not to their `0/<NON_REF>` value of 99. GATK maps a missing allele to `<NON_REF>`, giving `0,99,1485,99,1485,1485`, and that is what §3.1's parent PLs reflect. A caution was added. -> test; `AlleleSubsettingUtils.getIndexesOfRelevantAllelesForGVCF`.
+7. "GenotypeGVCFs writes the ALT without `<NON_REF>` [from memory - verify]". -> Now verified: `GenotypingEngine` keeps `<NON_REF>` "only in the absence of a non-symbolic allele". -> GATK `GenotypingEngine.java`.
+8. Q8 distractor (a): "A homozygous de novo SNV. *That needs two independent mutations.*" -> Wrong, because the mother is `0/1` and already carries G. A hom-alt child needs only one new mutation, on the paternal copy, to exactly the same base. The explanation now says that this is improbable (about 10^-8 per base) and does not explain the half coverage. The keyed answer (b) is unchanged. -> reasoning from the stated genotypes.
+9. Misconception 14: "A swapped PED ... creates genome-wide Mendelian errors". -> Swapping only the mother and father labels leaves autosomal trio checks unchanged, because the check is symmetric in the parents. Only a wrong child, or a sample mix-up, does that. The capstone candidate "PED with mother and father swapped" now says how it is detected (PED sex column, chrX in a male child). -> Mendelian logic.
+10. VCF-S20's minimal violation `NOTE=a;b` is not detectable: it parses as a valid `NOTE=a` plus a Flag `b`. -> It was replaced with a UTF-8 BOM ("VCF files must not contain a byte order mark", 4.3+). -> VCFv4.5.tex §1.2; VCFv4.3.tex.
+11. VCF-S06: "A 7-column line gives 'truncated file'". -> "truncated file" is pysam's `OSError`. bcftools prints only "VCF parse error". -> test.
+12. VCF-S12 described FILTER as a list of *declared* IDs, at error severity. -> Declaring the IDs is only recommended (see VCF-M03). The error is the reserved `0` ("must not" since 4.3, "should not" in 4.2). -> VCFv4.2/4.5.tex §1.6.1 item 7.
+13. §3.2: "`##SAMPLE`, `##META` (added in 4.3)". -> `##SAMPLE` already exists in 4.1/4.2. Only `##META` was introduced in 4.3. -> VCFv4.2.tex; 4.5 change list.
+14. Number table: `P` listed as 4.5-only. -> It was added in 4.5 and back-added to 4.4 as an erratum ("Type=P added ... used by PSL/PSO"). -> VCFv4.5.tex change list.
+15. §3.6(b)/GVCF-M04: covered positions "must show GT `.`". -> Incomplete. The full rule is GT `.` "and have no FORMAT fields other than LAA present". -> VCFv4.5.tex §5.5.
+16. Spec erratum sidebar: "Its 4396 row lists 6 FORMAT keys for 4 values". -> Fewer values than keys is legal (trailing fields may be dropped). The real defect is that MIN_DP is skipped, so the 6-value PL falls into the Number=1 MIN_DP slot. The `;14` error appears in every block row. The §5.3 errata (delbp2 should be POS 5, REF G; the `<INS>` REF should be G) were re-checked against `ATGCGAAAAAAATGT` and are correct. -> VCFv4.5.tex §5.3, §5.5.
+17. EX-12 option 4: the [from memory] locale claim was supplemented with a verified mechanism. `LC_ALL=C sort` moves `##fileformat` off line 1 (htslib: "unknown file type"), and tabix fails with "Unsorted positions on sequence #1: 166013043 followed by 99". -> test.
+18. EX-08 answer key used ambiguous labels ("200" for both 166,011,200 and 166,014,200; "500" for two sites). -> Full coordinates are used now. -> editorial.
+19. VCF-S08's example fragment `...0/0:0,84,1260` did not match any sample string in §3.1. -> `...0/0:28,0:28:84:0,84,1260` plus TAB. -> editorial.
+20. §3.7: "Parent ID `0` means not in the dataset [verified: gatk-docs]". -> The GATK page uses `0` in its example but does not define it. This is the PLINK convention, now marked [from memory - verify]. -> gatk-docs `Pedigree___PED_files.md`.
+21. **Case thread.** The researcher's summary says the case "stays consistent with the sibling docs". -> `case.md` (the canonical case) explicitly replaces this note's placeholders: DN-2 at chr2:166,009,887, DN-1 in *SCN9A* at 166,204,022, a 25,213-bp `<DEL>` at POS 166,014,902, and a hemizygous `0/0` at rs2298771. A superseding notice was added at the top, in EX-08 and in §10. As written, this note's story also gave the child two independent de novo *SCN1A* events, which is clinically implausible; `case.md` avoids it. The snippets were left in place as format examples, because every REF base is real. -> `case.md` §3.2, §3.6, §10.2.
+
+### Re-verified as written (selection)
+
+- Every REF base in the note against GRCh38 (the only mismatch, 166,011,200 `G`, is the intentional M01 and EX-05 error): 166,009,959 C; 166,012,370 T; 166,012,739 A; 166,013,043-045 TTC inside `TCTCTCTC` (166,013,044-051); 166,016,000-005 `CTTGTG`; 166,009,974-984 `TTTAAAAAATT`; and all gVCF block starts.
+- htslib messages and behaviours, each reproduced:
+  - S01 unknown file type; S04 the spaces-in-header message; S05 duplicated sample; S06 "(2 vs 3)";
+  - S07 empty INFO becomes `.`; S08 trailing tab accepted; S09 POS 0 accepted with the tabix "Coordinate <= 0" warning;
+  - S11 `high` becomes 0; S12 warning plus "Unchecked error (2 Tag not defined in header)"; S13 first DP kept, `DB=1` accepted;
+  - S15 "Incorrect number of FORMAT fields"; S16 both GT messages; S17 10.5 becomes 10; S18 AD count not checked;
+  - M01 "Reference allele mismatch ... REF_SEQ:'T' vs VCF:'G'"; M02 contig warning and BCF failure; M03 INFO warning; M04 "Unsorted positions" and "Chromosome blocks not continuous"; M05 not checked;
+  - M07 "Duplicate alleles"; M08 pysam `(0, None)`; M10 `<DEL>` without SVLEN gets rlen 1 and is missed by region queries; M15 "faidx_fetch_seq failed";
+  - MAF `-` fails with "Non-ACGTN alternate allele"; CRLF accepted; "No sample line".
+- SV ends: SVLEN 368, SVLEN -368 and END all give end 166,012,738 under 4.2 and 4.5 headers. LEN=20 gives rlen 20.
+- Records and transforms:
+  - the breakend pair passes `norm --check-ref e` and BCF output once MATEID is declared;
+  - `norm -m-` turns a `0/2` into `0/0` in the ALT-1 record;
+  - all five deletion spellings normalize to `166009976 TA T`;
+  - the EX-06 target passes `norm --check-ref e` and tabix;
+  - the de novo filter returns only the SNV;
+  - plain gzip fails tabix and `bcftools index` ("cannot be usefully indexed");
+  - the magic bytes (BGZF `1f 8b 08 04 ... 06 00 42 43 02 00`, gzip `1f 8b 08 08`, `BCF\x02\x02`, `TBI\x01`, `CSI\x01`) all check out.
+- Spec text:
+  - §1.3 data types and reserved integers; §1.4 meta-line rules; contig regex and the 4.3/2019 change; QUAL/FILTER/INFO definitions; GT prefix notation (4.4);
+  - genotype ordering and `b(b+1)/2+a` (EX-04 index 4 and Q4 index 1 are correct);
+  - `<*>` (4.3) and `<NON_REF>` alias (4.5); SVLEN sign history; END deprecation; header line "clarified ... mandatory" (4.5); the breakend table (§5.4); `*` allele (4.2).
+- GATK:
+  - HomRefBlock (GQ from element-wise min PLs, DP median, MIN_DP min, `--floor-blocks`);
+  - default `-GQB` 1..60, 70, 80, 90, 99 with `##GVCFBlock<lo>-<hi>=minGQ=..(inclusive),maxGQ=..(exclusive)`;
+  - the GQ-0 to `./.` logic; `--include-non-variant-sites`; the CombineGVCFs caveat quote;
+  - PossibleDeNovo thresholds (hi: child GQ ≥ 20, parents ≥ 20, DP ≥ 0; lo: child GQ ≥ 10, parents GQ > 0; AC < max(4, 0.1% of samples)), so the EX-08 bins are correct;
+  - the gatk-docs N+1 and "Clearer distinction" quotes; the GATK3 FAQ bands [5, 20, 60].
+- Strelka `BLOCKAVG_min30p3a`, `y <= max(x+3, x*1.3)`, block FORMAT `GT:GQX:DP:DPF:MIN_DP`, ALT/QUAL `.`.
+- bcftools: `+mendelian2 -P` columns and the `--rules` default GRCh37; `+trio-dnm3` exists; CSI default `min_shift` 14 and 2^31; TBI 2^29.
+- Quiz keys Q1-Q5 and Q7 were confirmed. EX-01, EX-02, EX-03 (six `XA->X` anchors, `AT T` legal), EX-07, EX-09, EX-10 and EX-11 keys were confirmed.
+
+### Could not verify
+
+- GATK writes `0/0:0:0:0:0,0,0` for zero-coverage gVCF stretches (plausible; no source line read).
+- Non-C-locale `sort` ignoring `#` (no other locale is installed in this sandbox).
+- GATK requiring contig order to match the sequence dictionary (VCF-C04, §4).
+- Whether IGV surfaces htsjdk's GT-position error as a load failure or as a per-record warning (only the codec source was read).
+- Any SCN1A exon/intron status for the placeholder coordinates. Ensembl, UCSC and NCBI are blocked here; `case.md` holds the GENCODE v43-checked coordinates.
+- Illumina help pages and DRAGEN gVCF band defaults (unreachable, as the original note says).

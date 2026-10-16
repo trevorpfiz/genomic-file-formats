@@ -22,7 +22,7 @@ This research note gives lesson writers the **canonical** definition of the fict
 | Foundations | What can be broken, and why sequence a trio? | Vignette | SNV, indel, CNV, SV. Parents let us see *new* changes. |
 | FASTA | Compared with what? | GRCh38 analysis set, chr2 | SCN1A is on chr2, minus strand. |
 | FASTQ | What did the sequencer see? | 3 exomes | Reads and qualities. One file arrived broken. |
-| BED | Where did we look? | Capture targets | Coding exons only. A variant outside them is invisible. |
+| BED | Where did we look? | Capture targets | Coding exons only (plus about 100 bp of padding, where reads still spill over). A variant far outside them is invisible. |
 | SAM/BAM/CRAM | Where do the reads belong? | Alignments | Reads stack on the exons. MAPQ falls in repeats. CRAM needs the exact FASTA. |
 | WIG | Is anything missing? | Depth tracks | Proband-only half depth over 4 SCN1A exons. Is it a deletion? |
 | gVCF → VCF | Any new small variants? | Joint trio VCF | One true de novo SNV, but it is synonymous and in SCN9A. One "de novo" fails on parental evidence. One Mendelian error sits inside the dip. |
@@ -33,7 +33,7 @@ This research note gives lesson writers the **canonical** definition of the fict
 
 **Ethics frame.** Put this on the course's first case page and repeat it briefly at the capstone.
 - Noa and her family are **fictional**.
-- Genes, the reference genome, the annotation and the two named SNPs are real public data.
+- Genes, the reference genome, the annotation and the named SNPs (rs2298771, rs6432860 and, in a Read-more, rs3812718) are real public data.
 - The deletion, the de novo SNV and all genotypes are **invented for teaching**. Any resemblance to a reported patient variant is coincidental. Do not submit them to databases.
 - Nothing in the course is clinical advice. Drug and counselling remarks are narrative context only, phrased as "the clinical team…", never as instructions.
 - **Avoid:**
@@ -92,7 +92,7 @@ The case also exercises the second half of the learning objective, *assessing va
 **Why SCN1A.** Alternatives considered: STXBP1, KCNQ2, SCN2A, CDKL5 (X-linked, so ploidy complications) and PCDH19 (unusual female-limited inheritance).
 - Dravet syndrome is mainly caused by heterozygous loss of function of SCN1A, through haploinsufficiency. Most cases are de novo `[search summary: about 80-90% SCN1A-positive, mostly de novo; verify]`.
 - Exon-level and whole-gene deletions are an established, MLPA-detectable mechanism. Marini et al. (2009, Epilepsia) found SCN1A CNVs in **12.5% of sequence-negative Dravet** patients, about **2-3% of all Dravet**, including partial-gene deletions `[search summary of Marini 2009]`.
-- Parental mosaicism occurs in about 7-13% of families (de Lange et al. 2019, J Med Genet 56:75) `[search summary]`. It has been reported for an SCN1A deletion `[search summary: J Med Case Rep 2016, PMC4810572]`.
+- Parental mosaicism is reported in roughly 5-13% of families. De Lange et al. 2019 (J Med Genet 56:75) cite 7-13% from earlier studies in their background; their own smMIP + ddPCR screen confirmed true mosaics in 4 of 80 parent couples (5%) `[search summary]`. Mosaicism has been reported for an SCN1A deletion `[search summary: J Med Case Rep 2016, PMC4810572; Marini 2009 also reports a partial SCN1A deletion inherited from a mosaic parent]`.
 - ClinGen lists SCN1A haploinsufficiency as "sufficient evidence" (score 3) `[search summary; dosage.clinicalgenome.org unreachable - verify]`.
 
 SCN1A also suits the *format* teaching:
@@ -144,7 +144,7 @@ Resulting genotypes:
 |---|---|---|---|
 | A. Trio exome | FASTQ → CRAM → gVCF → joint VCF | De novo filter: 1 pass (SCN9A c.4707C>T, synonymous). 1 fail (SCN1A c.3880-46G>A: father GQ 12) | Small-variant route exhausted → look at dosage |
 | B. Exome reanalysis | Depth WIG + ratio track; VCF Mendelian check | Proband ratio ≈ 0.50 at targets of exons 17-20 only (exon 25 is low in *all* three, an artefact). Mendelian error at rs2298771, inside the dip. Balanced het at rs6432860, just outside it | Breakpoints only bracketed (introns 16 and 20); a complex event is not excluded → orthogonal test |
-| C. Proband short-read WGS | BAM → SV caller → BEDPE | `DEL_1` (+/−, SR=8, PE=14). Side 1 is precise; side 2 is a 282-bp window = the whole AluB element. A weak `BND_2` (+/+) points into another Alu (MAPQ 0) | Repeat blocks the exact junction; is the inversion-like call real? → long reads |
+| C. Proband short-read WGS | BAM → SV caller → BEDPE | `DEL_1` (+/−, SR=8, PE=14). Side 1 is narrow (a 28-bp window in unique sequence); side 2 is a 282-bp window = the whole AluB element. A weak `BND_2` (+/+) points into another Alu (MAPQ 0) | Repeat blocks the exact junction; is the inversion-like call real? → long reads |
 | D. Proband HiFi | minimap2 PAF; phased assembly; local GFA | Junction-spanning reads split into two PAF blocks, 25,213 bp apart in the target, 0 bp apart in the query. 7-bp microhomology `CACCATG`. No inversion. The deletion is on the haplotype carrying G at rs6432860, so it is paternal. Graph: only proband hap 2 uses the deletion edge | — |
 | E. Interpretation | GTF/GFF3 (MANE) | Exons 17-20 (legacy coding exons 14-17), 1,135 coding nt, frameshift p.(Val806Alafs*24); the premature stop lies in exon 21 of 29, so NMD is predicted | Report; parental junction PCR (not a file format) |
 
@@ -188,13 +188,13 @@ Notes on the table:
 - intron 19: 166,015,728-166,036,047 (20,320 bp);
 - intron 20: 166,013,899-166,015,606 (1,708 bp).
 
-**Exons 5A and 5N.** A second 92-bp exon at 166,053,039-166,053,130 is used by 1 of 17 transcripts and is captured by the exome. It is exon **5N**, because rs3812718 (`IVS5N+5G>A`) sits exactly +5 from its donor at 166,053,034 [verified: dbSNP138 position; the "IVS5N+5" name is from memory - verify]. MANE exon 8 is therefore 5A.
+**Exons 5A and 5N.** A second 92-bp exon at 166,053,039-166,053,130 is used by 1 of the 17 SCN1A transcripts that contain an exon-5 alternative (the other 16 use MANE exon 8; SCN1A has 25 transcripts in GENCODE v43) [verified: GENCODE v43]. It is captured by the exome. It is exon **5N**, because rs3812718 (`IVS5N+5G>A`) sits exactly +5 from its donor at 166,053,034 [verified: dbSNP138 position, C>T on + = G>A on the coding strand; the "IVS5N+5" name is from memory - verify]. The same SNP's older name `IVS5-91G>A` also fits: 166,052,943 (the acceptor end of MANE exon 8) + 91 = 166,053,034 [computed]. MANE exon 8 is therefore 5A.
 
 **The deletion** [computed]:
 - `chr2:166,014,903-166,040,115` (left-aligned), **25,213 bp**.
 - 7-bp microhomology `CACCATG`, so there are 8 equivalent placements up to `166,014,910-166,040,122`.
 - Left end: intron 20, unique sequence.
-- Right end: inside **AluB**, `chr2:166,039,936-166,040,217`. AluB is on the − orientation, 288 bp, and 93% identical to an AluY consensus typed from memory. Subfamily assignment needs RepeatMasker `[verify]`.
+- Right end: inside **AluB**, `chr2:166,039,936-166,040,217`. AluB is on the − orientation, 282 bp (so the BEDPE window `[166039935,166040217)` is exactly the element), and about 93% identical to an AluY consensus typed from memory. ("AluA"/"AluB" are this note's labels for two copies, not Alu subfamily names.) Subfamily assignment needs RepeatMasker `[verify]`.
 - Junction (+ strand): `…CAAGCTGCTGTTC|CACCATGTTAGGCAGGATGGTCTCGATCTCC…`. The right side is Alu sequence.
 - Other near-identical Alus in the slice:
   - `AluA`: 166,019,922-166,020,209 (−, 93%), inside the deleted segment;
@@ -208,7 +208,7 @@ Notes on the table:
   - In MANE terms it is NM_001165963.4:c.3199G>A p.(Ala1067Thr) [computed]. GRCh38 carries **Ala**, the minor allele. The literature's "T1067A" names the major allele first `[from memory - verify]`.
 - **rs6432860**, `chr2:166,041,354 A>G`, exon 16.
   - Synonymous, same CAF; c.2292T>C p.(Val764=) [computed].
-- Neither of the two candidate de novo positions (166,009,887; 166,204,022) is in dbSNP138 [verified].
+- Neither of the two candidate de novo positions (166,009,887; 166,204,022) is in dbSNP138 [verified]. dbSNP138 dates from 2013: newer dbSNP builds or gnomAD may list variants at these positions, so the course should say "absent from dbSNP138", not "novel" `[not checked against current releases]`.
 
 **SCN9A** (de novo SNV host):
 - ENSG00000169432.19, `chr2:166,195,185-166,376,001` (−).
@@ -272,7 +272,8 @@ NP_001159435.1:p.(Val806Alafs*24)                (predicted)
 - **166014902 appears five times**: as the BED start, the VCF POS, the PAF target end of block 1, the last base of `96M`, and `SO+LN` of `s1`. Half-open intervals and the VCF anchor base meet at the same integer.
 - **The right end** is `166040115`. That is the BED end, POS+SVLEN, the PAF target start of block 2 and the `SO` of `s6`. The SAM `SA` position is `166040116` because SAM POS is 1-based.
 - **The PAF query is continuous** (8964 → 8964) while the target jumps 25,213 bp: a clean deletion with no inserted bases. NM = col11 − col10 = 11 (PAF-M09).
-- **SVCLAIM=DJ** says depth *and* junction evidence. It is required for `<DEL>` in VCF 4.5 [verified: VCFv4.5 §3, SVCLAIM]. `CIPOS=0,7` together with `HOMSEQ` encodes the microhomology, as the spec instructs ("CIPOS should be used in conjunction with HOMSEQ") [verified].
+- **SVCLAIM=DJ** says depth *and* junction evidence. It is required for `<DEL>` in VCF 4.5 [verified: VCFv4.5 §3, SVCLAIM]. `CIPOS=0,7` together with `HOMSEQ` encodes the microhomology, as the spec instructs ("CIPOS should be used in conjunction with HOMSEQ") [verified]. There is no `CIEND`: VCF 4.5 says "If CIEND is missing, it is assumed to match CIPOS" [verified], which is why BEDPE window 2 is also 0..+7 around END.
+- **By-construction placement, not aligner output.** The SAM and PAF lines put the cut at the left-aligned placement. Real aligners usually extend each piece through the 7 identical bases, so a BWA-style record would more likely read `103M47S` with `SA` `96S54M`, and minimap2's two PAF blocks may overlap by up to 7 query bases instead of meeting at 0. Both are equally correct. Cross-file checks (CASE-07) must therefore accept any of the 8 placements, not only the left-aligned one.
 
 ### 3.7 Example-data strategy (generator)
 
@@ -352,7 +353,7 @@ NP_001159435.1:p.(Val806Alafs*24)                (predicted)
 | HGVS g. | 3′ rule | 166,014,910 | 166,040,122 |
 
 **Further conventions.**
-- **The BEDPE window convention is a course decision.** The BEDPE spec defines only "start/end of the first/second end" [verified: bedtools general-usage]. The course derives windows from VCF: `[POS−1+CIPOS₀, POS+CIPOS₁)` and `[END−1+CIEND₀, END+CIEND₁)` with `END = POS+SVLEN`. This mirrors `svtools vcftobedpe` `[from memory - verify]`. Validators accept any window ≤ 50 bp that contains the defining base.
+- **The BEDPE window convention is a course decision.** The BEDPE spec defines only "start/end of the first/second end" [verified: bedtools general-usage]. The course derives windows from VCF: `[POS−1+CIPOS₀, POS+CIPOS₁)` and `[END−1+CIEND₀, END+CIEND₁)` with `END = POS+SVLEN`. This mirrors `svtools vcftobedpe` `[from memory - verify]`. For the precise (HiFi-derived) call, as in EX-08, validators accept any window ≤ 50 bp that contains the defining base. Imprecise short-read calls legitimately have wider windows (`DEL_1` side 2 is 282 bp), so the ≤ 50-bp check must not run on the capstone BEDPE: there, F10 must fail only on BEDPE-S01.
 - **Minus strand.**
   - c. numbering increases as genomic coordinates *decrease*.
   - `exon_number 1` is at the highest coordinate [verified: GENCODE v43].
@@ -382,16 +383,16 @@ Rule IDs refer to the other research notes. Levels: E = error, W = warning, C = 
 |---|---|---|---|---|---|---|
 | CASE-F01 | `ref/chr2_SCN1A_region.fa` + `.fai` | FASTA | valid (control) | Slice named `chr2:165980001-166380000`, 400,000 bp; `.fai` consistent | — | — |
 | CASE-F02 | `fastq/P042-mother_S2_L001_R2_001.fastq.gz` | FASTQ | **invalid** | Last record ends after the `+` line, with no quality line; `gzip -t` fails | FQ-S06 | E |
-| CASE-F03 | `capture/exome_targets_GRCh38.bed` | BED | **invalid (subtle)** | Starts copied from the 1-based interval_list (`166041231` instead of `166041230`); leading `track` line | CASE-03, BED-S17 | E / W |
-| CASE-F04 | `bam/P042-father.bam` | BAM | **invalid** | Missing the 28-byte BGZF EOF block (copy truncated at a block boundary) | BAM-S03 | E |
+| CASE-F03 | `capture/exome_targets_GRCh38.bed` | BED | **invalid (subtle)** | Starts copied from the 1-based interval_list (`166041231` instead of `166041230`); leading `track` line | CASE-03, BED-S17 | E / E (strict BEDv1 §5: "valid BED files must not have any browser or track lines"; bedtools and UCSC still accept it) |
+| CASE-F04 | `bam/P042-father.bam` | BAM | **invalid** | Missing the 28-byte BGZF EOF block (copy truncated at a block boundary) | BAM-S03 | E (course). The spec says the marker "should be written" and its absence "should trigger a warning or error" (SAMv1 §4.1.2) |
 | CASE-F05 | `cram/P042-proband.cram` + `.crai` | CRAM 3.1 | valid, **undecodable here** | `@SQ SN:chr2 M5:f98db672…`; the folder only has the slice FASTA, so a full GRCh38 is needed | CRAM-M02, CASE-02 | E (pipeline) |
 | CASE-F06 | `coverage/P042-proband.depth.wig` | WIG | valid (control) | Shows the dip | — | — |
 | CASE-F07 | `vcf/P042-father.g.vcf.gz` + `.tbi` | gVCF | valid (control) | Contains the GQ-12 block at 166,009,870-166,009,902 | — | — |
-| CASE-F08 | `vcf/P042-proband.g.vcf.gz` | gVCF | **invalid as `.gz`** | Plain gzip: bytes `1f 8b 08 00`, no BGZF `BC` extra field; cannot be indexed | VCF-C02, CASE-09 | E (tooling) |
+| CASE-F08 | `vcf/P042-proband.g.vcf.gz` | gVCF | **invalid as `.gz`** | Plain gzip: FLG byte lacks FEXTRA (`0x04`), e.g. `1f 8b 08 08` from `gzip file` or `1f 8b 08 00` from a stream, so there is no BGZF `BC` extra field; cannot be indexed | VCF-C02, CASE-09 | E (tooling) |
 | CASE-F09 | `vcf/P042.trio.vcf.gz` + `.tbi` | VCF | **invalid (subtle)** | `##contig=<ID=chr2,length=243199373>`, the GRCh37 length, against GRCh38 data | VCF-M15, CASE-01 | E |
 | CASE-F10 | `sv/P042-proband.sv.bedpe` | BEDPE | **invalid** | `BND_2` line has 9 columns (`strand2` missing) | BEDPE-S01 | E |
 | CASE-F11 | `annotation/SCN1A_SCN9A.MANE.gtf` | GTF | valid (control) | GENCODE v43 lines | — | — |
-| CASE-F12 | `annotation/SCN1A.MANE.gff3` | GFF3 | **invalid (subtle)** | Exon-21 CDS phase `0` instead of `2`. The phase chain breaks, and the error would wrongly make the 17-20 deletion look in-frame | GTF-M06 / GFF3 phase chain, CASE-11 | E |
+| CASE-F12 | `annotation/SCN1A.MANE.gff3` | GFF3 | **invalid (subtle)** | Exon-21 CDS phase `0` instead of `2`. The phase chain breaks, and the error would wrongly make the 17-20 deletion look in-frame | GFF3-M08 (GTF-M06 is the GTF twin), CASE-11 | E |
 | CASE-F13 | `longread/P042-proband.hifi.txt` | **PAF** (misleading extension) | **invalid** | One line has col 10 > col 11 (`8966	8955`) | PAF-M03 | E |
 | CASE-F14 | `graph/P042_locus.gfa` | GFA 1.1 | **invalid** | `L	s1	+	s6	+	0M` removed, so the `P042-proband` hap-2 walk `>s1>s6>s8>s9` is not supported | GFA-M09 | E |
 
@@ -401,7 +402,7 @@ Rule IDs refer to the other research notes. Levels: E = error, W = warning, C = 
 |---|---|---|---|---|---|
 | CASE-01 | Every declared `chr2` length is 242,193,529: `.fai`, `@SQ LN`, `##contig`, PAF col 7 | SAMv1 §1.3 `@SQ`; VCF §1.4.7; PAF col 7 | `##contig=<ID=chr2,length=243199373>` | E | violated (F09) |
 | CASE-02 | The CRAM's reference is available: some FASTA sequence has the `@SQ` name and M5 | CRAMv3 (reference MD5) | slice `chr2:165980001-166380000` ≠ `chr2` | E | violated (F05) |
-| CASE-03 | BED target = GTF CDS: `start = GTF start − 1`, `end = GTF end` | BEDv1 0-based; GTF 1-based | `chr2	166041231	166041469` vs GTF 166041231-166041469 | E | violated (F03) |
+| CASE-03 | BED target = GTF CDS: `start = GTF start − 1`, `end = GTF end`. In the last coding exon compare with CDS + `stop_codon` (the GTF CDS line excludes the stop; the target `165991244-165992422` includes it). Skip `SCN1A_e5N`, which has no MANE CDS line | BEDv1 0-based; GTF 1-based | `chr2	166041231	166041469` vs GTF 166041231-166041469 | E | violated (F03) |
 | CASE-04 | Sample IDs agree across FASTQ names, `@RG SM`, VCF columns, PED | VCF §1.4.9 (PEDIGREE) | `SM:P042-mother` inside `P042-father.bam` | E | passes |
 | CASE-05 | VCF and gVCF REF equals the FASTA at POS | VCF §1.6.1 (REF) | `chr2	166204022	.	T	A` (GRCh38 has G) | E | passes |
 | CASE-06 | Targets with ratio ≈ 0.5 lie inside the deletion; targets with ratio ≈ 1 lie outside | biological consistency | the exon-21 target dipping too would contradict the breakpoints | W | passes |
@@ -409,7 +410,7 @@ Rule IDs refer to the other research notes. Levels: E = error, W = warning, C = 
 | CASE-08 | Every Mendelian error is explained (inside a called deletion) or flagged | trio logic | an error at rs6432860 would contradict a paternal deletion ending at 166,040,115 | W | passes |
 | CASE-09 | Every `.gz` that needs random access is BGZF with a fresh index | SAMv1 §4.1 (BGZF); tabix | F08 | E | violated (F08) |
 | CASE-10 | gVCF blocks are contiguous and non-overlapping over the padded targets | gVCF semantics | `END=166009902` followed by `POS 166009900` | E | passes |
-| CASE-11 | CDS phases chain: `phase₍ₖ₊₁₎ = (3 − ((lenₖ − phaseₖ) mod 3)) mod 3` in transcript order | GFF3/GTF phase definition | F12 | E | violated (F12) |
+| CASE-11 | CDS phases chain: `phase₍ₖ₊₁₎ = (3 − ((lenₖ − phaseₖ) mod 3)) mod 3` in transcript order, where lenₖ is the CDS segment length, not the exon length (they differ in exons 4 and 29) | GFF3/GTF phase definition | F12 | E | violated (F12) |
 | CASE-12 | GFA rank-0 segment sequence equals FASTA[`SO`, `SO`+LN); each walk step has a 0M link | rGFA.md; GFA1 W-line | F14 | E | violated (F14) |
 | CASE-13 | PAF internal arithmetic: col10 ≤ col11; start < end ≤ length | PAF.md | F13 | E | violated (F13) |
 | CASE-14 | Containers are complete: gzip integrity; BGZF EOF block | SAMv1 §4.1.2 | F02, F04 | E | violated |
@@ -433,7 +434,7 @@ Rule IDs refer to the other research notes. Levels: E = error, W = warning, C = 
 | FASTA | `>chr2:165980001-166380000` then sequence lines | FASTQ (no `+` line every 4th line) |
 | FASTQ.gz | gunzip → `@LH00417:42:…` / bases / `+` / qualities | FASTA; SAM (no tabs) |
 | BED | `track …` then `chr2	166041231	166041469	SCN1A_e16` | interval_list (`@HD`/`@SQ` header, 1-based, 5 columns with `+`); bedGraph (4th column numeric) |
-| BAM | `1f 8b 08 04 … 42 43 02 00` (BGZF); decompressed `BAM\1` [verified: SAMv1] | CRAM (`CRAM` + `03 01`) [verified: CRAMv3 §6]; plain `.gz` (`1f 8b 08 00`) |
+| BAM | `1f 8b 08 04 … 42 43 02 00` (BGZF); decompressed `BAM\1` [verified: SAMv1] | CRAM (`CRAM` + `03 01`) [verified: CRAMv3 §6]; plain `.gz` (FLG byte without `0x04`, e.g. `1f 8b 08 08` or `1f 8b 08 00`) |
 | WIG | `fixedStep chrom=chr2 start=166041231 step=20 span=20` then bare numbers | bedGraph (4 columns); bigWig (binary `26 FC 8F 88`, see `intervals-signals.md`) |
 | gVCF | `##fileformat=VCFv4.2` … `<NON_REF>` alleles with `END=` | plain VCF (no reference blocks) |
 | VCF | `##fileformat=VCFv4.x`; a `#CHROM` line with ≥ 1 sample | gVCF; BCF (binary `BCF\2`) |
@@ -441,7 +442,7 @@ Rule IDs refer to the other research notes. Levels: E = error, W = warning, C = 
 | GTF | 9 columns; column 9 `gene_id "…"; transcript_id "…";` | GFF3 (`##gff-version 3`, `key=value`) |
 | PAF (as `.txt`) | ≥ 12 columns: name, length, start, end, `+`/`-`, target, length… `tp:A:P` | BEDPE (no strand in col 5); SAM (`@` header, FLAG) |
 | GFA | `H	VN:Z:1.1`; `S`/`L`/`W` lines | GAF (PAF-like, with a `>s1>s6` path in col 6) |
-| `.tbi` / `.bai` / `.crai` | BGZF → `TBI\1` [verified: tabix spec] / `BAI\1` [verified: SAMv1] / gzipped text | — |
+| `.tbi` / `.bai` / `.crai` | `.tbi`: BGZF, decompressing to `TBI\1` [verified: tabix spec]. `.bai`: **uncompressed** binary starting `BAI\1` [magic verified: SAMv1 §5.2, which, unlike tabix.tex, specifies no BGZF wrapper; "uncompressed" from memory - verify with `xxd`]. `.crai`: gzipped TAB-delimited text [verified: CRAMv3 §12] | — |
 
 ## 7. Common misconceptions and pitfalls (as they appear in the case)
 
@@ -505,7 +506,7 @@ Predict: does the father also carry a deletion of exon 17?
 - The proband's is 58/116 ≈ 0.50.
 - Raw depths look alike only because his library was shallower.
 
-Follow-up: the exon-25 bins read 64 (proband), 66 (mother) and 35 (father). The ratio is about 1.0 in all three, so it is a capture artefact.
+Follow-up: the exon-25 bins read 64 (proband), 66 (mother) and 35 (father). Depth over each sample's own mean is about 0.55 in **all three** (64/116, 66/121, 35/63). A drop that every sample shares belongs to the target (a short 54-bp exon captures poorly), not to one genome. Normalized against the other samples or a reference panel (the ratio track), each ratio is about 1.0, so it is a capture artefact, not a deletion.
 
 **EX-03 · spot-the-error · targets converted from an interval_list** (BED lesson). Data lines are TAB-delimited. Click every faulty element.
 
@@ -519,8 +520,8 @@ chr2	166036048	166036530	SCN1A_e19
 
 **Answers:**
 1. Every start (column 2) is 1-based. The GTF says exon 16 starts at 166,041,231, so the BED start must be `166041230` (CASE-03).
-2. The lines descend (transcript order on the minus strand), so the file is unsorted for tabix and `bedtools -sorted`.
-3. The `track` line makes this a strict-BED violation (BED-S17, warning).
+2. The lines descend (transcript order on the minus strand), so the file is unsorted for tabix and `bedtools -sorted`. This is a recommended-practice warning, not a validity error: BEDv1 §3.4 says BED files "should be sorted".
+3. The `track` line makes this a strict-BED violation (BED-S17, error under strict BEDv1 §5, "valid BED files must not have any browser or track lines"; bedtools and UCSC tolerate it).
 
 **EX-04 · sort · "keep or reject?"** (gVCF → VCF lesson). Lines are TAB-delimited. Bins: *Keep as de novo* / *Reject: parental evidence too weak* / *Keep, but cannot explain the phenotype*.
 
@@ -528,7 +529,7 @@ chr2	166036048	166036530	SCN1A_e19
 chr2	166009887	.	C	T	212.6	PASS	AC=1;AN=6	GT:AD:DP:GQ	0/1:14,12:26:99	0/0:31,0:31:90	0/0:5,0:5:12
 chr2	166204022	.	G	A	1388.2	PASS	AC=1;AN=6	GT:AD:DP:GQ	0/1:52,47:99:99	0/0:104,0:104:99	0/0:58,0:58:99
 # father's gVCF around the first site
-chr2	166009842	.	C	<NON_REF>	.	.	END=166009869	GT:DP:GQ:MIN_DP:PL	0/0:21:60:18:0,54,810
+chr2	166009842	.	C	<NON_REF>	.	.	END=166009869	GT:DP:GQ:MIN_DP:PL	0/0:21:54:18:0,54,810
 chr2	166009870	.	T	<NON_REF>	.	.	END=166009902	GT:DP:GQ:MIN_DP:PL	0/0:6:12:5:0,12,135
 ```
 
@@ -576,7 +577,7 @@ chr2	166014902	166014910	chr2	166040115	166040123	DEL_P042_1	60	+
 ```
 
 Validator:
-- 10 columns (BEDPE-S01);
+- exactly 10 columns here, because the task asks for both strands (BEDPE-S01 by itself also accepts 6, 7, 8 or more than 10; only 9 is ambiguous);
 - strands `+ -`;
 - `start1 ≤ 166014901 < end1`;
 - `start2 ≤ 166040114 < end2`;
@@ -600,7 +601,7 @@ Predict:
 - (a) Deleted reference bases: tstart₂ − tend₁ = **25,213**.
 - (b) Inserted query bases: qstart₂ − qend₁ = **0**.
 - (c) Is there an inversion? **No**; both blocks are `+`.
-- (d) Which haplotype is the single-line read from? It spans the whole deleted region, including rs2298771 and rs6432860, so it is the **maternal** haplotype (C and A).
+- (d) Which haplotype is the single-line read from? It aligns as one unbroken block from 166,025,872 (1-based) through the right breakpoint at 166,040,115 and on past rs2298771 and rs6432860. Those bases are *inside* the deletion, which the paternal haplotype lacks, so the read is from the **maternal** haplotype (C and A). It does not span the whole deleted region: it starts about 11 kb inside it.
 
 **EX-10 · spot-the-error · the local graph** (GFA lesson). TAB-delimited. Click the line that makes the file invalid.
 
@@ -642,7 +643,7 @@ Follow-ups:
 
 Items:
 1. ratio 0.50 over the exon-17-20 targets;
-2. ratio 1.0 at exon 25 despite low raw depth;
+2. panel-normalized ratio 1.0 at exon 25 despite low raw depth in all three samples;
 3. Mendelian error at rs2298771;
 4. balanced het at rs6432860;
 5. SCN9A de novo synonymous;
@@ -783,7 +784,7 @@ Questions and answers:
 - **The reference carries the minor allele** at rs2298771. How often that happens genome-wide `[verify]`.
 - **NMD rules of thumb** and why the premature stop in exon 21 of 29 is predicted to trigger it `[from memory - verify]`.
 - **Exome CNV calling** with reference panels (normalization, GC and target-length effects; why the 54-bp exon 25 is noisy).
-- **Parental mosaicism.** About 7-13% of SCN1A families `[search summary, de Lange 2019]`. Junction assays and counselling, without numbers presented as advice.
+- **Parental mosaicism.** Roughly 5-13% of SCN1A families: de Lange 2019 cite 7-13% from earlier work and found 4 of 80 couples (5%) themselves `[search summary]`. Junction assays and counselling, without numbers presented as advice.
 - **hifiasm and minigraph(-cactus) outputs.** Assembly GFA vs pangenome GFA with W lines vs rGFA `[from memory - verify tool output details]`.
 
 ## 12. Sources
@@ -824,3 +825,76 @@ Questions and answers:
 - `ftp.ebi.ac.uk` (GENCODE FTP), `mygene.info`, `www.encodeproject.org`.
 
 Ensembl REST facts were therefore verified through GENCODE v43 and the Ensembl 110 xref table instead.
+
+## Verification log
+
+An independent adversarial fact-check ran on 2026-10-16. It re-fetched the primary data and specs itself rather than trusting the citations above:
+- GRCh38 `chr2:165,980,001-166,380,000`, read by HTTP range from the Broad `Homo_sapiens_assembly38.fasta` and spot-checked against the GENCODE `GRCh38.primary_assembly.genome.fa`;
+- the GENCODE v43 GTF (Funcotator bundle, range reads), `gencode.v43.pc_transcripts.fa`, and the Ensembl 110 xref TSV;
+- dbSNP138 (remote tabix), the Twist interval_list, the GRCh38 `.dict`/`.fai` and the GRCh37 `.fai`;
+- `VCFv4.5.tex`, `SAMv1.tex`, `SAMtags.tex`, `CRAMv3.tex`, `BEDv1.tex`, `tabix.tex`, `PAF.md`, `GFA1.md`, `rGFA.md`, bedtools `general-usage.rst` and `minimap2.1`.
+
+**Corrections made** (claim → correction → source):
+
+1. §3.4: AluB is "288 bp" → 282 bp. That is the length of its own coordinates 166,039,936-166,040,217, and it matches the 282-bp BEDPE window. Source: arithmetic; Smith-Waterman of the fetched slice against an AluY consensus (from memory): − strand, about 92.5% identity.
+2. §3.4: 5N "used by 1 of 17 transcripts" → 1 of the 17 transcripts that carry an exon-5 alternative (16 use 5A). SCN1A has 25 transcripts in v43. Added the older name `IVS5-91G>A`, consistent at 166,052,943 + 91. Source: GENCODE v43 GTF; dbSNP138.
+3. §3.3 stage C: "Side 1 is precise" → narrow (a 28-bp window). Source: the note's own `DEL_1` BEDPE line and Q3.
+4. §1 BED row: "A variant outside them is invisible" → far outside, beyond the padding. DN-2 at c.3880-46 is intronic yet is called. Source: internal consistency.
+5. §1 ethics: "the two named SNPs" → the named SNPs. rs3812718 is also used. Source: internal consistency.
+6. §3.1 and §11: "Parental mosaicism about 7-13% (de Lange 2019)" → 7-13% is the range cited in that paper's background. Its own result is 4 of 80 couples (5%). Source: web-search summaries of the abstract; jmg.bmj.com unreachable.
+7. EX-02 follow-up: "the [exon-25] ratio is about 1.0 in all three" contradicted the ratio defined in the same answer (depth / sample mean = 0.55 for 64/116, 66/121 and 35/63). → 0.55 in all three; about 1.0 only after cross-sample or panel normalization. EX-11 item 2 was reworded to match. Source: arithmetic.
+8. EX-03 and CASE-F03: BED-S17 (`track` line) was a "warning" → error under strict BEDv1. §5 says "valid BED files must not have any browser or track lines". This now matches `intervals-signals.md` BED-S17. Descending order is relabelled a recommended-practice warning ("should be sorted", BEDv1 §3.4). Source: BEDv1.tex.
+9. CASE-F04: noted that the spec level is SHOULD. The EOF marker "should be written" and its absence "should trigger a warning or error". E stays as the course level, as in `alignments.md` BAM-S03. Source: SAMv1 §4.1.2.
+10. CASE-F08 and §6: plain gzip "bytes `1f 8b 08 00`" → the defining feature is the FLG byte without FEXTRA (0x04). `gzip file` usually writes `1f 8b 08 08`. Source: SAMv1 §4.1 (BGZF FLG = 4); RFC 1952 flag bits [from memory].
+11. §6 index row: "BGZF → TBI\1 / BAI\1 / gzipped text" implied that `.bai` is BGZF → only `.tbi` is BGZF. `.bai` is a raw binary starting `BAI\1`, and `.crai` is gzipped text. Source: tabix.tex ("The index file is BGZF compressed"); SAMv1 §5.2; CRAMv3 §12.
+12. CASE-F12: rule "GTF-M06 / GFF3 phase chain" → GFF3-M08 for the GFF3 file. CASE-11 now says len is the CDS-segment length. Source: `annotation.md` rule table.
+13. EX-04: the father's first gVCF block had GQ 60 with PL `0,54,810` → GQ 54. A hom-ref GQ is the second-lowest PL. Source: GQ/PL definition; internal consistency.
+14. EX-09 (d): "It spans the whole deleted region" was false. The read starts at 166,025,872, about 11 kb *inside* the deletion → it aligns through deleted bases, so it cannot be paternal. The keyed answer (maternal) is unchanged. Source: arithmetic on the PAF line.
+15. §4 BEDPE convention: "Validators accept any window ≤ 50 bp" would also reject the canonical short-read `DEL_1` (282-bp window) and make F10 fail on two rules → scoped to precise calls (EX-08), and F10 must fail only on BEDPE-S01. EX-08's "10 columns (BEDPE-S01)" was clarified the same way: BEDPE-S01 alone accepts 6/7/8/10+. Source: bedtools general-usage.rst (columns 7-10 optional); `intervals-signals.md` BEDPE-S01.
+16. CASE-03: added exceptions. The last coding exon's target includes the stop codon, which the GTF CDS line excludes, and `SCN1A_e5N` has no MANE CDS. Without them the check fails on the valid exon-29 target. Source: GENCODE v43 GTF; Twist interval_list.
+17. §3.6: added two notes. First, the missing CIEND defaults to CIPOS (VCF 4.5: "If CIEND is missing, it is assumed to match CIPOS"), which justifies BEDPE window 2. Second, the SAM `96M54S` and the 0-bp PAF query gap are by-construction left-aligned placements; real aligners usually extend through the 7-bp microhomology, so CASE-07 must accept all 8 placements. Source: VCFv4.5.tex §3; minimap2.1.
+18. §3.4: "not in dbSNP138" is now explicitly limited to that 2013 build. Source: dbSNP138 query; scope note.
+
+**Re-verified and correct (no change):**
+- **SCN1A gene and transcript.** Gene ID, HGNC, extent and strand. MANE transcript ID, tags, ENSP and CCDS; NM_001165963.4 / NP_001159435.1.
+- **MANE exons.** All 29 exon coordinates, lengths, c. ranges and phases. Start and stop codons. CDS 6,030 nt, which translates to 2,009 aa with no internal stop and matches `pc_transcripts.fa`.
+- **Legacy numbering.** Legacy exon = MANE − 3. ENST00000375405 has 26 exons, and its exon 11 is 33 nt shorter.
+- **Introns and deletion.** All intron coordinates. The deletion: 25,213 bp, left-aligned (no further left shift), exactly 7 right shifts (`CACCATG`), and the junction and EX-13 context strings.
+- **REF bases.** Every REF base used (166014902 C, 166015606 C, 166036278 C, 166041354 A, 166009887 C, 166204022 G, 166009842 C, 166009870 T; GFA s3 C, s7 A).
+- **Consequences.**
+  - p.(Val806Alafs*24); the stop falls in exon 21.
+  - p.(Val806_Glu1143del): 338 aa, with no 3′ shift possible.
+  - p.(Cys1185Ilefs*2).
+  - In-frame 20-21 (276 nt); frameshift 19-20 (604 nt).
+- **SNPs.**
+  - rs2298771: c.3199G>A p.(Ala1067Thr), codon GCA, CAF 0.2144/0.7856.
+  - rs6432860: c.2292T>C p.(Val764=), same CAF.
+  - rs3812718 at 166,053,034 (+5 of the 5N donor).
+- **De novo sites.**
+  - DN-2: c.3880-46G>A.
+  - DN-1: SCN9A c.4707C>T p.(Leu1569=) in exon 26. SCN9A has 27 exons and 1,988 aa (NM_001365536.1).
+- **Paralog cluster.** Order and strands. The SCN1A-SCN9A gap is about 46 kb.
+- **Reference files.**
+  - chr2 length and M5; GRCh37 chr2 = 243,199,373; 3,366 sequences.
+  - `.fai` offset 251,446,211 and the byte formula. GENCODE FASTA offset 253,105,712.
+  - Both slice MD5s. Neither FASTA is soft-masked.
+- **Twist targets.** The CDS match, with the stated exceptions (5N, exon-28 165,994,108, and exon 29 including the stop). UTR exons are untargeted.
+- **Notation crosswalk.** Every BED/VCF/SAM/BEDPE/PAF/rGFA/HGVS coordinate in §3.6 and §4, including c.2416-519_3550+704 and g.166014910_166040122.
+- **Arithmetic.** PAF arithmetic and NM = col11 − col10 for all three PAF lines. All GFA SO/LN/walk lengths. EX-10's only invalid line is the last W line, per GFA1 "Each consecutive pair of oriented segments must correspond to a 0-overlap link record".
+- **VCF 4.5 rules.** SVCLAIM "must be specified" for DEL/DUP. The "indirect claims ... SNV variant allele frequency" quote. SVLEN is positive. END is deprecated. CIPOS must span 0. The CNV record's CIPOS/CIEND equal the flanking introns.
+- **SAM/BAM/CRAM.** SAM FLAG 97, TLEN 25,640 and the SA syntax (SAMtags). BGZF/BAM/CRAM 3.1 magic bytes. minimap2 map-hifi `-g10k` makes the 25-kb gap split into two PAF blocks.
+- **Answer keys.** Every remaining exercise and quiz answer key (EX-01, EX-05, EX-06, EX-07, EX-12, EX-13; Q1-Q9) has a correct keyed answer and wrong distractors.
+
+**Could not verify** (sources unreachable or memory-only; left marked in the text):
+- GeneReviews/ILAE clinical statements: sodium-channel-blocker aggravation; NSGC first-tier guideline.
+- The ClinGen HI score of 3. ClinVar summaries show "sufficient evidence", consistent with it; dosage.clinicalgenome.org was unreachable.
+- Marini 2009 details beyond the abstract (12.5% of sequence-negative cases, about 2-3% overall: consistent in search summaries).
+- PMC4810572 (the mosaic SCN1A deletion case).
+- The "IVS5N+5" naming source.
+- Alu subfamily (needs RepeatMasker; the consensus used here was typed from memory).
+- The MMEJ mechanism.
+- NMD rules of thumb and the MANE definition wording.
+- `svtools vcftobedpe` window behaviour.
+- PacBio Revio and hifiasm naming conventions.
+- Whether `.bai` is uncompressed (correct from memory, but not stated in SAMv1).
+- Current dbSNP/gnomAD status of the two invented de novo sites.
