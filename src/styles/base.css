@@ -1,0 +1,208 @@
+/* M0 base styles: tokens for light and dark, and a plain reading layout. M1 brings the design
+   system (tokens.css, fonts.css, prose.css, widgets.css, print.css). */
+:root {
+  color-scheme: light;
+  --bg: #fcfbf8;
+  --fg: #1f1e1d;
+  --muted: #5c5a57;
+  --line: #dcd8d0;
+  --surface: #f3f1ec;
+  --accent: #0b6b66;
+  --error: #a3271f;
+  --font-prose: Georgia, "Times New Roman", serif;
+  --font-ui: system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --bg: #1b1a19;
+  --fg: #ecebe8;
+  --muted: #b3b0aa;
+  --line: #3d3b38;
+  --surface: #262523;
+  --accent: #5ec4ba;
+  --error: #f0857c;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --bg: #1b1a19;
+    --fg: #ecebe8;
+    --muted: #b3b0aa;
+    --line: #3d3b38;
+    --surface: #262523;
+    --accent: #5ec4ba;
+    --error: #f0857c;
+  }
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--fg);
+  font: 17px/1.6 var(--font-ui);
+}
+
+a {
+  color: var(--accent);
+}
+
+code {
+  font-family: var(--font-mono);
+  font-size: 0.92em;
+  background: var(--surface);
+  padding: 0.05em 0.3em;
+  border-radius: 4px;
+}
+
+.topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.75rem 1.25rem;
+  border-bottom: 1px solid var(--line);
+}
+
+.brand {
+  color: var(--fg);
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.layout {
+  display: grid;
+  grid-template-columns: minmax(0, 46rem) minmax(0, 16rem);
+  gap: 3rem;
+  max-width: 68rem;
+  margin: 0 auto;
+  padding: 1.5rem 1.25rem 4rem;
+}
+
+@media (max-width: 960px) {
+  .layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .aside {
+    order: -1;
+  }
+}
+
+main:focus {
+  outline: none;
+}
+
+h1,
+h2,
+h3 {
+  font-family: var(--font-prose);
+  font-weight: 500;
+  line-height: 1.25;
+}
+
+.crumbs,
+.pills,
+.toc-title,
+.overline {
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+.pill {
+  display: inline-block;
+  margin-right: 0.5rem;
+  padding: 0.1rem 0.6rem;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+}
+
+.prose {
+  font-family: var(--font-prose);
+}
+
+.toc ol {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  border-left: 2px solid var(--line);
+}
+
+.toc a {
+  display: block;
+  padding: 0.3rem 0.75rem;
+  color: var(--muted);
+  text-decoration: none;
+}
+
+gf-predict,
+gf-simulator {
+  display: block;
+  margin: 1.5rem 0;
+  padding: 1rem 1.25rem;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface);
+  font-family: var(--font-ui);
+}
+
+gf-predict input[type="text"] {
+  display: block;
+  margin: 0.25rem 0 0.75rem;
+  padding: 0.4rem 0.5rem;
+  font: inherit;
+  min-height: 2.5rem;
+}
+
+button {
+  font: inherit;
+  min-height: 2.5rem;
+  padding: 0.4rem 0.9rem;
+  margin-right: 0.5rem;
+}
+
+.text-view th {
+  text-align: left;
+  padding-right: 1.5rem;
+  font-weight: 500;
+}
+
+.widget-error {
+  color: var(--error);
+}
+
+.disclosure,
+.callout {
+  margin: 1.25rem 0;
+  padding: 0.75rem 1rem;
+  border-left: 3px solid var(--accent);
+  background: var(--surface);
+}
+
+.disclosure-summary,
+.callout-label {
+  font-family: var(--font-ui);
+  font-weight: 600;
+  cursor: default;
+}
+
+.disclosure-summary {
+  cursor: pointer;
+}
+
+.fallback,
+.noscript {
+  max-width: 40rem;
+}
+
+.noscript {
+  margin: 0;
+  padding: 0.75rem 1.25rem;
+  background: var(--surface);
+  border-bottom: 1px solid var(--line);
+}

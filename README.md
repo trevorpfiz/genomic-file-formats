@@ -6,8 +6,23 @@ Learners build an intuition for genomic data from the ground up, learn to recogn
 
 The course ships as a single self-contained HTML file: open it from disk, email it, or use the hosted copy.
 
-**Status:** planning. Research notes live in [`docs/research/`](docs/research/), and the course plan will be in `docs/PLAN.md`.
+**Status:** M0, repository bootstrap. The course plan is [`docs/PLAN.md`](docs/PLAN.md), and the research notes behind it live in [`docs/research/`](docs/research/).
+
+## Develop
+
+You need Node 22.22.0 and the [Vite+](https://viteplus.dev/guide/) CLI (`npm install --global vite-plus@1.3.0`).
+
+```sh
+vp install                       # pnpm 12.14.0 and the locked dependencies
+vp dev                           # dev server
+vp check && vp test              # format, lint, types; unit and widget tests
+vp build                         # dist/index.html, the single self-contained file
+node scripts/check-dist.mjs dist # the one-file and content gates
+vp exec playwright test          # e2e over file://
+```
+
+See [`docs/CONTRIBUTING.md`](docs/CONTRIBUTING.md) for authoring rules and how to add an exercise.
 
 ## License
 
-[MIT](LICENSE)
+[MIT](LICENSE). Bundled third-party code keeps its own license; see [`LICENSES/`](LICENSES/).

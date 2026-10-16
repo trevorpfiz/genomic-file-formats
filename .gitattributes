@@ -1,0 +1,7 @@
+# Normalize text to LF everywhere, so a Windows checkout cannot rewrite bytes (docs/PLAN.md 11.2).
+* text=auto eol=lf
+
+# Exact bytes: never convert line endings in fixtures, base64 payloads or generated case modules.
+fixtures/** -text
+*.b64 -text
+src/case/generated/** -text

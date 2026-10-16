@@ -1,0 +1,89 @@
+# CI (docs/PLAN.md 11.7): check, test, build once, assert the single file, e2e on all three
+# engines over file://, and upload the course-html artifact. release.yml calls this workflow.
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_call:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  actionlint:
+    name: Lint workflows
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: actionlint (release binary, checksum-pinned)
+        env:
+          ACTIONLINT_VERSION: 1.7.12
+          ACTIONLINT_SHA256: 8aca8db96f1b94770f1b0d72b6dddcb1ebb8123cb3712530b08cc387b349a3d8
+        run: |
+          archive="$RUNNER_TEMP/actionlint.tar.gz"
+          curl -fsSL -o "$archive" \
+            "https://github.com/rhysd/actionlint/releases/download/v${ACTIONLINT_VERSION}/actionlint_${ACTIONLINT_VERSION}_linux_amd64.tar.gz"
+          echo "${ACTIONLINT_SHA256}  ${archive}" | sha256sum --check --strict
+          tar -xzf "$archive" -C "$RUNNER_TEMP" actionlint
+          "$RUNNER_TEMP/actionlint" -color
+
+  build:
+    name: Check, test, build and e2e
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    env:
+      # The Pages URL comes from GITHUB_REPOSITORY (scripts/pages-url.mjs).
+      COURSE_VERSION: ${{ github.ref_type == 'tag' && github.ref_name || github.sha }}
+      COURSE_RELEASE: ${{ github.ref_type == 'tag' && '1' || '0' }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      # Installs Node from .node-version and runs `vp install`, which installs pnpm 12.14.0 from
+      # devEngines. pnpm verifies the frozen lockfile against the release-age gate (D-31).
+      - uses: voidzero-dev/setup-vp@3754dd7dbdb32bd8f6d28b6043de13ad3a75f21f # v1.21.1
+        with:
+          node-version-file: .node-version
+          cache: true
+          run-install: |
+            - args: ['--frozen-lockfile']
+      - name: Format, lint and type check
+        run: vp check
+      - name: Unit, content and widget tests
+        run: vp test
+      - name: Generated modules are up to date
+        run: vp run gen:case --check
+      - name: Build the single file
+        run: vp build
+      - name: Assert one self-contained file within budget
+        run: node scripts/check-dist.mjs dist
+      - name: Install Playwright browsers
+        run: vp exec playwright install --with-deps chromium firefox webkit
+      - name: E2E on the built file over file://
+        run: vp exec playwright test
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: course-html
+          path: dist/index.html
+          if-no-files-found: error
+          retention-days: 14
+      - name: Upload the Playwright report
+        if: failure()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: playwright-report
+          path: |
+            playwright-report/
+            test-results/
+          if-no-files-found: ignore
+          retention-days: 7

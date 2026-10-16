@@ -1,0 +1,53 @@
+{
+  "name": "genomic-file-formats",
+  "version": "0.0.0",
+  "private": true,
+  "description": "An interactive course on genomic file formats, shipped as one self-contained HTML file.",
+  "license": "MIT",
+  "type": "module",
+  "scripts": {
+    "dev": "vp dev",
+    "check": "vp check",
+    "test": "vp test",
+    "build": "vp build",
+    "e2e": "playwright test",
+    "gen:case": "echo 'gen:case: the case generator arrives in M2 (docs/PLAN.md section 13); nothing to generate yet.'",
+    "fixtures:build": "echo 'fixtures:build: the fixture builder arrives in M2 (docs/PLAN.md D-32); nothing to build yet.'"
+  },
+  "dependencies": {
+    "preact": "10.29.8"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.63.0",
+    "@types/hast": "3.0.5",
+    "@types/mdast": "4.0.4",
+    "@types/node": "22.20.4",
+    "happy-dom": "20.14.5",
+    "rehype-stringify": "10.0.1",
+    "remark-directive": "4.0.0",
+    "remark-frontmatter": "5.0.0",
+    "remark-gfm": "4.0.1",
+    "remark-parse": "11.0.0",
+    "remark-rehype": "11.1.2",
+    "typescript": "6.0.3",
+    "unified": "11.0.5",
+    "unist-util-visit": "5.1.0",
+    "vfile": "6.0.3",
+    "vite": "catalog:",
+    "vite-plugin-singlefile": "2.3.3",
+    "vite-plus": "catalog:",
+    "yaml": "2.9.1"
+  },
+  "devEngines": {
+    "packageManager": {
+      "name": "pnpm",
+      "version": "12.14.0",
+      "onFail": "download"
+    },
+    "runtime": {
+      "name": "node",
+      "version": "22.22.0",
+      "onFail": "error"
+    }
+  }
+}

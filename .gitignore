@@ -6,3 +6,7 @@ playwright-report/
 .vite/
 *.log
 .DS_Store
+dist-ssr/
+*.local
+blob-report/
+playwright/.cache/
