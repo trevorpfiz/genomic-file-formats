@@ -1,7 +1,7 @@
 {
   "compilerOptions": {
     "target": "es2023",
-    "module": "esnext",
+    "module": "nodenext",
     "lib": ["ES2023", "DOM", "DOM.Iterable"],
     "types": ["vite-plus/client", "node"],
     "jsx": "react-jsx",
@@ -10,8 +10,9 @@
     "allowJs": true,
     "checkJs": true,
 
-    /* Bundler mode; the same rules a strip-only TypeScript loader enforces (docs/PLAN.md 11.1) */
-    "moduleResolution": "bundler",
+    /* The rules a strip-only TypeScript loader enforces (docs/PLAN.md 11.1): Node resolution, so a
+       relative import without its extension fails (TS2835); `import type` for types; no enums. */
+    "moduleResolution": "nodenext",
     "allowImportingTsExtensions": true,
     "verbatimModuleSyntax": true,
     "erasableSyntaxOnly": true,

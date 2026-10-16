@@ -49,6 +49,9 @@ test.each([
   ["a relative image", page("", `<img src="fig.svg">`)],
   ["a CSS url()", page(`<style>body{background:url(bg.png)}</style>`)],
   ["a remote font", page(`<style>@font-face{src:url("https://fonts.example/x.woff2")}</style>`)],
+  ["a CSS @import string", page(`<style>@import "https://fonts.example/x.css";</style>`)],
+  ["a single-quoted style attribute url()", page("", `<p style='background:url(a.png)'>x</p>`)],
+  ["an SVG xlink:href", page("", `<svg><use xlink:href="sprite.svg#a"></use></svg>`)],
 ])("%s fails", (_label, html) => {
   expect(check({ "index.html": html }).errors.length).toBeGreaterThan(0);
 });

@@ -16,8 +16,26 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  # The tag filter above still admits leading zeros (v01.2.3); SemVer does not.
+  tag:
+    name: Strict SemVer tag
+    runs-on: ubuntu-24.04
+    timeout-minutes: 2
+    permissions: {}
+    steps:
+      - name: Check the tag is vMAJOR.MINOR.PATCH
+        if: github.event_name == 'push'
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          if [[ ! "$TAG" =~ ^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]]; then
+            echo "::error::Tag ${TAG} is not a strict SemVer release tag (vMAJOR.MINOR.PATCH, no leading zeros)."
+            exit 1
+          fi
+
   ci:
     name: CI
+    needs: tag
     uses: ./.github/workflows/ci.yml
     permissions:
       contents: read
@@ -62,15 +80,19 @@ jobs:
             echo "Would attach \`${NAME}\` and \`${NAME}.sha256\`; a vX.Y.Z tag push publishes them and deploys Pages."
           } >> "$GITHUB_STEP_SUMMARY"
 
+  # Deploys only after the Release exists, so the hosted page is always a released file (D-33).
   pages:
     name: GitHub Pages
-    needs: ci
+    needs: [ci, github-release]
     if: github.event_name == 'push' && github.ref_type == 'tag'
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     permissions:
       pages: write
       id-token: write
+    concurrency:
+      group: pages
+      cancel-in-progress: false
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}

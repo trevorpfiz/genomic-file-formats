@@ -110,7 +110,7 @@ export function checkDist(dir, options = {}) {
       errors.push(`stylesheet <link>: ${tag[0].slice(0, 120)}`);
     }
     for (const attr of attrs.matchAll(
-      /\s(src|href|srcset|poster|action|formaction|data)\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>]+))/gi,
+      /\s(src|href|xlink:href|srcset|poster|action|formaction|data|background|manifest)\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>]+))/gi,
     )) {
       const value = (attr[2] ?? attr[3] ?? attr[4] ?? "").trim();
       if (value.startsWith("data:") || value.startsWith("#")) continue;
@@ -121,9 +121,14 @@ export function checkDist(dir, options = {}) {
       );
     }
   }
-  const css =
-    styles.map((m) => m[1] ?? "").join("\n") +
-    [...markup.matchAll(/\sstyle\s*=\s*"([^"]*)"/gi)].map((m) => m[1]).join("\n");
+  const css = [
+    ...styles.map((m) => m[1] ?? ""),
+    ...[...markup.matchAll(/\sstyle\s*=\s*(?:"([^"]*)"|'([^']*)')/gi)].map((m) => m[1] ?? m[2] ?? ""),
+  ].join("\n");
+  // `@import "x.css"` loads a stylesheet without url().
+  for (const m of css.matchAll(/@import\s+(["'])([^"']*)\1/gi)) {
+    if (!(m[2] ?? "").startsWith("data:")) errors.push(`CSS @import "${(m[2] ?? "").slice(0, 80)}"`);
+  }
   for (const m of css.matchAll(/url\(\s*(["']?)([^"')]*)\1\s*\)/gi)) {
     const value = m[2] ?? "";
     if (!value.startsWith("data:") && !value.startsWith("#"))

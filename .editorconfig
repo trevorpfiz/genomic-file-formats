@@ -13,8 +13,13 @@ trim_trailing_whitespace = true
 # Two trailing spaces are a hard line break in Markdown.
 trim_trailing_whitespace = false
 
-# Exact bytes: never trim whitespace or touch final newlines in fixtures or generated modules.
-[{fixtures/**,src/case/generated/**,*.b64}]
+# Exact bytes, matching .gitattributes (docs/PLAN.md 11.2): never trim whitespace, add a final
+# newline, or convert line endings or charset in fixtures, base64 payloads or generated modules
+# (CRLF and BOM fixtures are deliberate). `**.b64` matches at any depth: a glob containing "/"
+# is anchored at this folder, so a plain `*.b64` here would match only top-level files.
+[{fixtures/**,src/case/generated/**,**.b64}]
+charset = unset
+end_of_line = unset
 trim_trailing_whitespace = false
 insert_final_newline = unset
 indent_style = unset
