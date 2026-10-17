@@ -1,7 +1,7 @@
 # CI (docs/PLAN.md 11.7): check, test, build once, assert the single file and upload the
 # course-html artifact; then e2e over file:// against that same file. While the course is in
 # early iteration, e2e runs Chromium only; a manual run with all-browsers adds Firefox and WebKit.
-# release.yml calls this workflow with e2e: false and publishes the artifact from the build job.
+# release.yml calls this workflow with skip-e2e and publishes the artifact from the build job.
 name: CI
 
 on:
@@ -10,9 +10,9 @@ on:
     branches: [main]
   workflow_call:
     inputs:
-      e2e:
+      skip-e2e:
         type: boolean
-        default: true
+        default: false
   workflow_dispatch:
     inputs:
       all-browsers:
@@ -92,7 +92,7 @@ jobs:
   e2e:
     name: E2E (${{ matrix.browser }})
     needs: build
-    if: inputs.e2e != false
+    if: ${{ !inputs.skip-e2e }}
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     continue-on-error: true

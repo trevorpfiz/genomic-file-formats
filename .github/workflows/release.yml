@@ -39,7 +39,7 @@ jobs:
     needs: tag
     uses: ./.github/workflows/ci.yml
     with:
-      e2e: false
+      skip-e2e: true
     permissions:
       contents: read
 
