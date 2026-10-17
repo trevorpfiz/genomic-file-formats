@@ -1,6 +1,6 @@
 # Contributing
 
-This is a stub; it grows with each milestone. The build contract is [`PLAN.md`](PLAN.md): §11 for architecture, §12 for accuracy and style, §13 for milestones.
+This is a stub; it grows with each milestone. The build contract is [`PLAN.md`](PLAN.md): §11 for architecture, §12 for accuracy and style, §13 for milestones. [`ARCHITECTURE.md`](ARCHITECTURE.md) is the developer contract: module map, types, the card API, the directive-to-HTML mapping and testing conventions.
 
 ## Setup
 
@@ -36,14 +36,15 @@ Lessons are Markdown files in `content/lessons/<NN-section>/<NN-slug>.md`, with 
 - **Genomic tokens go in backticks.** CommonMark reads `<DEL>`, `<INV>` and `<DUP>` as HTML tags and `<DUP:TANDEM>` as a link, so write `` `<DEL>` ``. `<NON_REF>`, `<*>`, `{A,C,G,T}` and `MAPQ <20` are plain text either way.
 - **Colons are safe.** `chr2:166,014,902`, `SA:Z:chr2,...`, `GT:AD:DP:GQ:PL` and `NM_000546.6:c.215C>G` print exactly as written; the compiler restores the text directives that remark-directive would otherwise read into them.
 - **Headings.** Do not write a `#` heading: the shell renders the title. Every lesson's last H2 is `## Recap`. Heading texts are unique within a page.
-- **Exercises.** Put a directive on its own line: `::predict{exercise="<lesson-id>/<slug>"}`. Directly under a `## Try it: ...` heading it is a "Try it" card; anywhere else it becomes a Quick check titled with the exercise's `title`. Inside `:::read-more{title="..."}` it is optional practice.
+- **Exercises.** Put a directive on its own line: `::predict{exercise="<lesson-id>/<slug>"}`. Directly under a `## Try it: ...` heading it is a "Try it" card; anywhere else in the main text it becomes a Quick check titled with the exercise's `title`. Inside `:::read-more{title="..."}` it is optional practice. A lesson has at most two "Try it" headings. Exercises never sit inside callouts or lists.
+- **Containers.** `:::read-more`, `:::spec-detail`, `:::why-it-matters` (each with `title`), `:::note`, `:::tip`, `:::watch-out`, `:::from-the-spec{cite}`, `:::case-file{step}` (1 to 5), `:::recap` (once, under `## Recap`), `:::at-a-glance{format}` (a list of `- **Row:** value` with at least Answers, Keeps, Drops and Next file) and `:::unverified{ref}`. See ARCHITECTURE.md §4 for the HTML each produces.
 - **Links.** `[text](#heading-id)` becomes a route to that heading in the same lesson; other internal links use `#/...` routes. External links use `https://`.
 
 ## Adding an exercise
 
-1. Open (or create) `src/exercises/<lesson-id>.ts` and add one exported const per exercise, typed with `satisfies` (types in `src/exercises/types.ts`). Its `id` is `<lesson-id>/<slug>`.
-2. A new module is registered once, in the `modules` map of `src/exercises/registry.ts`. Every export of a registered module is an exercise, so later exercises need no registry edit.
-3. Reference it from the lesson with the directive for its kind, for example `::predict{exercise="placeholder-hello/bed-to-one-based"}`.
+1. Open (or create) `src/exercises/<lesson-id>.ts` and add one exported const per exercise, typed with `satisfies` (types in `src/exercises/types.ts`). Its `id` is `<lesson-id>/<slug>`. A standalone snippet for `::snippet{id="..."}` is an exported `RegisteredSnippet` in the same module.
+2. A new module is registered once, in the `modules` map of `src/exercises/registry.ts`. Every export of a registered module is an exercise or a snippet, so later items need no registry edit. Section quizzes live in `src/quizzes/<section>.ts` and are registered in the same file.
+3. Reference it from the lesson with the directive for its kind, for example `::predict{exercise="fasta-reference/which-token"}`, and add any concept it uses to `content/course.ts` if a page introduces it there.
 
 Exercise modules are pure TypeScript: no CSS, `?raw` or other Vite-only imports, because the lesson plugin evaluates the registry in Vite's module runner. Write TAB and CR inside snippets as `\t` and `\r`: a test rejects a raw carriage return anywhere in `src/` and `content/`. In `vp dev`, an edit to any exercise module recompiles the lessons without a server restart.
 

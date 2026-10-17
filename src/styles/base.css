@@ -1,208 +1,606 @@
-/* M0 base styles: tokens for light and dark, and a plain reading layout. M1 brings the design
-   system (tokens.css, fonts.css, prose.css, widgets.css, print.css). */
-:root {
-  color-scheme: light;
-  --bg: #fcfbf8;
-  --fg: #1f1e1d;
-  --muted: #5c5a57;
-  --line: #dcd8d0;
-  --surface: #f3f1ec;
-  --accent: #0b6b66;
-  --error: #a3271f;
-  --font-prose: Georgia, "Times New Roman", serif;
-  --font-ui: system-ui, -apple-system, "Segoe UI", sans-serif;
-  --font-mono: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
-}
+/* Base styles on the design tokens (tokens.css; ux-design.md 3-6, 8.1; docs/PLAN.md 10):
+   element defaults, focus rings, controls (buttons, inputs), inline code and keys, icons, the
+   exercise card chrome (src/widgets/card.ts), utilities, reduced motion and forced colours.
+   The reading layout is in prose.css, the shell in layout.css, widget bodies in
+   src/widgets/widgets.css and print in print.css. */
 
-:root[data-theme="dark"] {
-  color-scheme: dark;
-  --bg: #1b1a19;
-  --fg: #ecebe8;
-  --muted: #b3b0aa;
-  --line: #3d3b38;
-  --surface: #262523;
-  --accent: #5ec4ba;
-  --error: #f0857c;
-}
-
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) {
-    color-scheme: dark;
-    --bg: #1b1a19;
-    --fg: #ecebe8;
-    --muted: #b3b0aa;
-    --line: #3d3b38;
-    --surface: #262523;
-    --accent: #5ec4ba;
-    --error: #f0857c;
-  }
-}
-
-* {
+*,
+*::before,
+*::after {
   box-sizing: border-box;
+}
+
+html {
+  /* Anchor jumps and focused elements never hide under the 48px sticky bar (WCAG 2.4.11). */
+  scroll-padding-top: 64px;
+  scrollbar-gutter: stable;
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
 }
 
 body {
   margin: 0;
+  min-height: 100vh;
   background: var(--bg);
-  color: var(--fg);
-  font: 17px/1.6 var(--font-ui);
+  color: var(--text-body);
+  font-family: var(--font-sans);
+  font-size: var(--fs-body);
+  line-height: var(--lh-body);
+  font-variant-numeric: lining-nums;
+  hyphens: manual;
+  -webkit-font-smoothing: antialiased;
 }
 
-a {
-  color: var(--accent);
-}
-
-code {
-  font-family: var(--font-mono);
-  font-size: 0.92em;
-  background: var(--surface);
-  padding: 0.05em 0.3em;
-  border-radius: 4px;
-}
-
-.topbar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 1rem;
-  padding: 0.75rem 1.25rem;
-  border-bottom: 1px solid var(--line);
-}
-
-.brand {
-  color: var(--fg);
-  font-weight: 600;
-  text-decoration: none;
-}
-
-.layout {
-  display: grid;
-  grid-template-columns: minmax(0, 46rem) minmax(0, 16rem);
-  gap: 3rem;
-  max-width: 68rem;
-  margin: 0 auto;
-  padding: 1.5rem 1.25rem 4rem;
-}
-
-@media (max-width: 960px) {
-  .layout {
-    grid-template-columns: minmax(0, 1fr);
+@media (max-width: 767px) {
+  body {
+    font-size: var(--fs-body-sm);
+    line-height: 1.59; /* 17/27 */
   }
-  .aside {
-    order: -1;
-  }
-}
-
-main:focus {
-  outline: none;
 }
 
 h1,
 h2,
-h3 {
-  font-family: var(--font-prose);
+h3,
+h4 {
+  color: var(--text);
+  overflow-wrap: break-word;
+}
+
+h1,
+h2 {
+  font-family: var(--font-serif);
   font-weight: 500;
-  line-height: 1.25;
+  text-wrap: balance;
 }
 
-.crumbs,
-.pills,
-.toc-title,
-.overline {
-  color: var(--muted);
-  font-size: 0.85rem;
+h3,
+h4 {
+  font-family: var(--font-sans);
+  font-weight: 600;
 }
 
-.pill {
-  display: inline-block;
-  margin-right: 0.5rem;
-  padding: 0.1rem 0.6rem;
-  border: 1px solid var(--line);
-  border-radius: 999px;
+h2,
+h3,
+[id] {
+  scroll-margin-top: 72px;
 }
 
-.prose {
-  font-family: var(--font-prose);
+p,
+li {
+  text-wrap: pretty;
 }
 
-.toc ol {
-  list-style: none;
+strong,
+b {
+  color: var(--text);
+  font-weight: 600;
+}
+
+img,
+svg {
+  max-width: 100%;
+}
+
+/* Links */
+a {
+  color: var(--accent);
+  text-decoration-line: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 0.2em;
+  transition: color var(--dur-1) var(--ease);
+}
+
+a:hover {
+  color: var(--accent-hover);
+  text-decoration-thickness: 2px;
+}
+
+/* Focus: a 2px accent ring with a 2px offset on every interactive element, never removed
+   (WCAG 2.4.7). Elements focused only by script (tabindex="-1": headings, <main>, verdict
+   lines) show no ring; they are not in the tab order. */
+:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+
+[tabindex="-1"]:focus:not(:focus-visible),
+h1[tabindex="-1"]:focus,
+h2[tabindex="-1"]:focus,
+h3[tabindex="-1"]:focus,
+main:focus {
+  outline: none;
+}
+
+/* Inline code and keys (ux 4.5) */
+code,
+kbd,
+pre,
+samp {
+  font-family: var(--font-mono);
+  font-variant-ligatures: none;
+  font-feature-settings:
+    "liga" 0,
+    "calt" 0;
+  font-synthesis: none;
+}
+
+code,
+kbd {
+  font-size: var(--fs-code);
+  padding: 0.1em 0.35em;
+  border: 1px solid var(--border);
+  border-radius: var(--r-chip);
+  background: var(--raised);
+  color: var(--text);
+  overflow-wrap: anywhere;
+  font-variant-numeric: tabular-nums;
+}
+
+kbd {
+  border-bottom: 2px solid var(--border-strong);
+}
+
+pre code {
   padding: 0;
-  margin: 0;
-  border-left: 2px solid var(--line);
+  border: 0;
+  background: none;
+  font-size: inherit;
+  overflow-wrap: normal;
 }
 
-.toc a {
+/* Gene symbols are italic in prose, never inside mono (ux 4.4). */
+em,
+i {
+  font-style: italic;
+}
+
+code em,
+code i {
+  font-style: normal;
+}
+
+hr {
+  border: 0;
+  border-top: 1px solid var(--border);
+  margin: var(--s-8) 0;
+}
+
+/* Utilities */
+.visually-hidden {
+  position: absolute !important;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+
+[hidden] {
+  display: none !important;
+}
+
+.print-header {
+  display: none;
+}
+
+/* Icons: Lucide SVGs, 1em, currentColor, stroke 1.75 (ux 6.1) */
+.gf-icon,
+.gf-svg {
+  display: inline-block;
+  width: 1em;
+  height: 1em;
+  vertical-align: -0.125em;
+  flex: none;
+}
+
+.gf-icon > svg {
   display: block;
-  padding: 0.3rem 0.75rem;
-  color: var(--muted);
+  width: 100%;
+  height: 100%;
+}
+
+/* Controls (ux 8.1): 40px buttons, 44px on touch; Check is the accent button. */
+button,
+input,
+select,
+textarea {
+  font: inherit;
+  color: inherit;
+  letter-spacing: inherit;
+}
+
+button,
+a.button-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--s-2);
+  min-height: 2.5rem;
+  padding: 0.4rem 0.9rem;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--r-control);
+  background: var(--raised);
+  color: var(--text);
+  font-size: var(--fs-ui);
+  font-weight: 500;
+  line-height: var(--lh-ui);
+  text-decoration: none;
+  cursor: pointer;
+  transition:
+    background-color var(--dur-1) var(--ease),
+    border-color var(--dur-1) var(--ease),
+    color var(--dur-1) var(--ease);
+}
+
+button:hover,
+a.button-link:hover {
+  border-color: var(--text-muted);
+  background: var(--sunken);
+  color: var(--text);
   text-decoration: none;
 }
 
-gf-predict,
-gf-simulator {
+button.button-primary,
+a.button-link.button-primary {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: var(--on-accent);
+  font-weight: 600;
+}
+
+button.button-primary:hover,
+a.button-link.button-primary:hover {
+  border-color: var(--accent-hover);
+  background: var(--accent-hover);
+  color: var(--on-accent);
+}
+
+button.button-text {
+  border-color: transparent;
+  background: none;
+  color: var(--accent);
+  padding-inline: 0.5rem;
+}
+
+button.button-text:hover {
+  background: var(--accent-subtle);
+  color: var(--accent-hover);
+}
+
+button[disabled],
+button[aria-disabled="true"] {
+  cursor: default;
+  opacity: 0.6;
+}
+
+@media (pointer: coarse) {
+  button,
+  a.button-link {
+    min-height: 2.75rem;
+  }
+}
+
+input,
+select,
+textarea {
+  max-width: 100%;
+  padding: 0.4rem 0.6rem;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--r-control);
+  background: var(--raised);
+  color: var(--text);
+  font-size: var(--fs-ui);
+}
+
+input[type="radio"],
+input[type="checkbox"] {
+  width: 1.125rem;
+  height: 1.125rem;
+  margin: 0;
+  accent-color: var(--accent);
+}
+
+textarea {
+  font-family: var(--font-mono);
+  font-size: var(--fs-snippet);
+  line-height: 1.5;
+}
+
+input[aria-invalid="true"],
+textarea[aria-invalid="true"] {
+  border-color: var(--error);
+  box-shadow: inset 0 0 0 1px var(--error);
+}
+
+/* No iOS focus zoom: form controls are at least 16px on coarse pointers (D-26, V-41). */
+@media (pointer: coarse) {
+  input,
+  select,
+  textarea {
+    font-size: var(--fs-control-coarse);
+  }
+}
+
+fieldset {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  min-width: 0;
+}
+
+/* --- The exercise card chrome (src/widgets/card.ts; ux 8.1) -------------------------------- */
+
+.exercise-card {
   display: block;
-  margin: 1.5rem 0;
-  padding: 1rem 1.25rem;
-  border: 1px solid var(--line);
-  border-radius: 8px;
+  margin: var(--s-7) 0;
+  padding: var(--s-5);
+  border: 1px solid var(--border);
+  border-top: 3px solid var(--accent);
+  border-radius: var(--r-card);
   background: var(--surface);
-  font-family: var(--font-ui);
+  font-size: var(--fs-ui);
+  line-height: var(--lh-ui);
+  color: var(--text-body);
 }
 
-gf-predict input[type="text"] {
+@media (max-width: 479px) {
+  .exercise-card {
+    padding: var(--s-4);
+  }
+}
+
+.card-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s-1) var(--s-4);
+}
+
+.card-overline {
+  flex: 1 0 auto;
+  margin: 0;
+  color: var(--text-muted);
+  font-size: var(--fs-overline);
+  font-weight: 600;
+  line-height: 1.333;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.card-header .quick-check-title,
+.card-header .exercise-title {
+  order: 3;
+  flex-basis: 100%;
+  margin: var(--s-1) 0 0;
+  font-family: var(--font-sans);
+  font-size: var(--fs-h3);
+  font-weight: 600;
+  line-height: var(--lh-h3);
+  color: var(--text);
+}
+
+.card-status {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s-1);
+  margin: 0;
+  padding: 0.1rem 0.55rem;
+  border: 1px solid var(--border);
+  border-radius: var(--r-pill);
+  background: var(--raised);
+  color: var(--text-muted);
+  font-size: var(--fs-meta);
+  font-weight: 500;
+}
+
+.card-status[data-state="idle"] svg {
+  color: var(--border-strong);
+}
+
+.card-status[data-state="attempted"] {
+  color: var(--accent);
+}
+
+.card-status[data-state="correct"] {
+  border-color: var(--success);
+  background: var(--success-bg);
+  color: var(--success);
+}
+
+.card-status[data-state="incorrect"] {
+  border-color: var(--error);
+  background: var(--error-bg);
+  color: var(--error);
+}
+
+.card-status[data-state="revealed"] {
+  background: var(--sunken);
+}
+
+.card-howto {
+  margin: var(--s-2) 0 0;
+  color: var(--text-muted);
+  font-size: var(--fs-meta);
+}
+
+.card-prompt {
+  margin: var(--s-3) 0 0;
+  color: var(--text-body);
+  font-size: 1rem;
+  line-height: 1.6;
+}
+
+.card-body {
+  margin-top: var(--s-4);
+  min-width: 0;
+}
+
+.card-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--s-2);
+  margin-top: var(--s-5);
+}
+
+.card-actions > div {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-2);
+}
+
+.card-actions-secondary:empty {
+  display: none;
+}
+
+.card-confirm {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s-2);
+  margin-top: var(--s-3);
+  padding: var(--s-3) var(--s-4);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--r-control);
+  background: var(--raised);
+}
+
+.card-confirm-text {
+  flex-basis: 100%;
+  margin: 0;
+  color: var(--text);
+}
+
+.card-hints {
+  margin: var(--s-3) 0 0;
+  padding: var(--s-3) var(--s-4) var(--s-3) var(--s-8);
+  border-left: 4px solid var(--warning);
+  border-radius: var(--r-control);
+  background: var(--warning-bg);
+  color: var(--text);
+}
+
+.card-hints li + li {
+  margin-top: var(--s-1);
+}
+
+.card-feedback {
+  margin-top: var(--s-4);
+  padding: var(--s-3) var(--s-4);
+  border: 1px solid var(--border);
+  border-radius: var(--r-control);
+  background: var(--sunken);
+  color: var(--text);
+  animation: gf-rise var(--dur-1) var(--ease);
+}
+
+.card-feedback[data-tone="success"] {
+  border-color: var(--success);
+  background: var(--success-bg);
+}
+
+.card-feedback[data-tone="error"] {
+  border-color: var(--error);
+  background: var(--error-bg);
+}
+
+/* One flowing sentence: the icon sits inline, so the verdict word never wraps on its own
+   ("Not / quite.") and inline code in the message stays in the text. */
+.card-verdict {
   display: block;
-  margin: 0.25rem 0 0.75rem;
-  padding: 0.4rem 0.5rem;
-  font: inherit;
-  min-height: 2.5rem;
+  margin: 0;
+  color: var(--text);
 }
 
-button {
-  font: inherit;
-  min-height: 2.5rem;
-  padding: 0.4rem 0.9rem;
-  margin-right: 0.5rem;
+.card-verdict > svg {
+  margin-right: 0.15em;
+}
+
+.card-verdict > strong {
+  white-space: nowrap;
+}
+
+.card-explanation {
+  margin-top: var(--s-2);
+}
+
+.card-explanation > :last-child {
+  margin-bottom: 0;
+}
+
+@keyframes gf-rise {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+}
+
+.widget-error {
+  padding: var(--s-2) var(--s-3);
+  border: 1px solid var(--error);
+  border-radius: var(--r-control);
+  background: var(--error-bg);
+  color: var(--text);
+}
+
+.widget-stub {
+  padding: var(--s-2) var(--s-3);
+  border: 1px dashed var(--border-strong);
+  border-radius: var(--r-control);
+  color: var(--text-muted);
+  font-size: var(--fs-meta);
 }
 
 .text-view th {
   text-align: left;
-  padding-right: 1.5rem;
+  padding-right: var(--s-6);
   font-weight: 500;
 }
 
-.widget-error {
-  color: var(--error);
+/* --- Motion (ux 6.6, 11): reduced motion removes transforms and smooth scrolling --------------- */
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+
+  .card-feedback {
+    animation: none;
+  }
 }
 
-.disclosure,
-.callout {
-  margin: 1.25rem 0;
-  padding: 0.75rem 1rem;
-  border-left: 3px solid var(--accent);
-  background: var(--surface);
-}
+/* --- Forced colours (ux 6.5): states keep outlines and icons ----------------------------------- */
 
-.disclosure-summary,
-.callout-label {
-  font-family: var(--font-ui);
-  font-weight: 600;
-  cursor: default;
-}
+@media (forced-colors: active) {
+  .exercise-card,
+  .card-status,
+  .card-feedback,
+  .pill,
+  .callout,
+  .disclosure,
+  .notice {
+    border: 1px solid CanvasText;
+  }
 
-.disclosure-summary {
-  cursor: pointer;
-}
+  :focus-visible {
+    outline: 2px solid Highlight;
+  }
 
-.fallback,
-.noscript {
-  max-width: 40rem;
-}
-
-.noscript {
-  margin: 0;
-  padding: 0.75rem 1.25rem;
-  background: var(--surface);
-  border-bottom: 1px solid var(--line);
+  .gf-icon,
+  .gf-svg {
+    forced-color-adjust: auto;
+  }
 }

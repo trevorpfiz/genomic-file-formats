@@ -1,0 +1,732 @@
+/* Simulator islands (docs/PLAN.md 7.5; ux 8.10): controls, then the visualization, then the
+   readout, the text view and the goals. Built on src/styles/tokens.css. Marks pair colour with
+   an outline, a fill pattern or text, so nothing is told by colour alone. */
+
+.simulator {
+  display: grid;
+  gap: var(--s-4);
+  min-width: 0;
+}
+
+.simulator > * {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.simulator code {
+  font-variant-numeric: tabular-nums;
+}
+
+/* --- Controls -------------------------------------------------------------------------------- */
+
+.sim-group {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: var(--s-3) var(--s-4);
+  margin: 0;
+  padding: var(--s-3) var(--s-4) var(--s-4);
+  border: 1px solid var(--border);
+  border-radius: var(--r-control);
+  background: var(--surface);
+}
+
+.sim-group > legend {
+  padding: 0 var(--s-1);
+  color: var(--text);
+  font-size: var(--fs-ui);
+  font-weight: 600;
+}
+
+.sim-group > * {
+  min-width: 0;
+}
+
+.sim-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: var(--s-3) var(--s-4);
+}
+
+.sim-field {
+  display: grid;
+  gap: var(--s-1);
+}
+
+.sim-field > label,
+.sim-field-label,
+.sim-slider > label {
+  color: var(--text-muted);
+  font-size: var(--fs-meta);
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+.sim-field input[type="number"],
+.sim-field input[type="text"] {
+  width: 11ch;
+  min-height: 2.5rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.sim-field-narrow input[type="number"],
+.sim-field-narrow input[type="text"] {
+  width: 8ch;
+}
+
+.sim-field-wide {
+  flex: 1 1 16rem;
+}
+
+.sim-field-wide input[type="text"] {
+  width: 100%;
+}
+
+.sim-field code {
+  display: inline-flex;
+  align-items: center;
+  min-height: 2.5rem;
+  padding: 0 var(--s-2);
+}
+
+.sim-mono,
+.sim-field input.sim-mono {
+  font-family: var(--font-mono);
+  font-variant-ligatures: none;
+}
+
+.sim-radios {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-2) var(--s-4);
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.sim-group.sim-radios {
+  padding: var(--s-3) var(--s-4);
+  border: 1px solid var(--border);
+}
+
+.sim-radios > legend {
+  float: left;
+  width: 100%;
+  margin-bottom: var(--s-1);
+  padding: 0;
+  color: var(--text-muted);
+  font-size: var(--fs-meta);
+  font-weight: 600;
+}
+
+.sim-group.sim-radios > legend {
+  color: var(--text);
+  font-size: var(--fs-ui);
+}
+
+.sim-radios code {
+  white-space: nowrap;
+}
+
+.sim-radios label,
+.sim-bgzf-eof > label {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s-2);
+  min-height: 2rem;
+  font-size: var(--fs-ui);
+}
+
+.sim-radios input,
+.sim-bgzf-eof input {
+  width: 1.1rem;
+  height: 1.1rem;
+  margin: 0;
+  accent-color: var(--accent);
+}
+
+.sim-bgzf-eof {
+  flex-direction: column;
+  align-items: flex-start;
+}
+
+.sim-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-2);
+}
+
+.sim-buttons button[aria-disabled="true"] {
+  border-style: dashed;
+  color: var(--text-muted);
+  cursor: default;
+}
+
+.sim-slider,
+.sim-slider-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s-1) var(--s-3);
+  width: 100%;
+}
+
+.sim-slider > label {
+  flex: none;
+}
+
+.simulator input[type="range"] {
+  flex: 1 1 12rem;
+  min-width: 8rem;
+  min-height: 2rem;
+  padding: 0;
+  border: 0;
+  background: none;
+  accent-color: var(--accent);
+}
+
+.sim-output {
+  min-width: 4ch;
+  color: var(--text);
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+}
+
+.sim-hint {
+  width: 100%;
+  margin: 0;
+  color: var(--text-muted);
+  font-size: var(--fs-meta);
+}
+
+.sim-presets {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s-2);
+}
+
+.sim-presets-label {
+  color: var(--text-muted);
+  font-size: var(--fs-meta);
+  font-weight: 600;
+}
+
+button.sim-chip {
+  min-height: 2.25rem;
+  padding: 0.2rem 0.8rem;
+  border-radius: var(--r-pill);
+  font-size: var(--fs-meta);
+}
+
+button.sim-chip[aria-pressed="true"] {
+  border-color: var(--accent);
+  background: var(--accent-subtle);
+  box-shadow: inset 0 0 0 1px var(--accent);
+}
+
+button.sim-chip code {
+  margin-right: 0.15em;
+}
+
+.sim-notice {
+  display: flex;
+  align-items: baseline;
+  gap: var(--s-2);
+  margin: 0;
+  color: var(--text);
+  font-size: var(--fs-meta);
+}
+
+.sim-notice[data-empty] {
+  display: none;
+}
+
+.sim-icon,
+.sim-goal-icon {
+  display: inline-flex;
+  flex: none;
+}
+
+/* --- Visualizations ---------------------------------------------------------------------------- */
+
+.sim-figure {
+  margin: 0;
+  padding: var(--s-3) var(--s-4);
+  border: 1px solid var(--border);
+  border-radius: var(--r-control);
+  background: var(--sunken);
+}
+
+.sim-figure > figcaption {
+  margin-bottom: var(--s-2);
+  color: var(--text-muted);
+  font-size: var(--fs-meta);
+}
+
+.sim-muted {
+  color: var(--text-muted);
+}
+
+/* .fai map: one row per segment, bytes | label | content */
+.sim-fai-rows {
+  display: grid;
+  gap: 2px;
+}
+
+.sim-fai-segment {
+  display: grid;
+  grid-template-columns: minmax(7.5rem, max-content) 7rem minmax(0, 1fr);
+  gap: var(--s-1) var(--s-3);
+  align-items: baseline;
+  padding: var(--s-1) var(--s-2);
+  border-left: 3px solid transparent;
+  border-radius: 0 var(--r-chip) var(--r-chip) 0;
+  font-size: var(--fs-meta);
+}
+
+.sim-fai-segment[data-kind="lines"],
+.sim-fai-segment[data-kind="before"],
+.sim-fai-segment[data-kind="after"] {
+  font-style: italic;
+}
+
+.sim-fai-segment[data-target] {
+  border-left-color: var(--accent);
+  background: var(--accent-subtle);
+}
+
+.sim-fai-bytes {
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.sim-fai-label {
+  color: var(--text);
+  font-weight: 600;
+}
+
+.sim-fai-content {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--s-1) var(--s-3);
+  min-width: 0;
+}
+
+.sim-fai-span {
+  color: var(--text-muted);
+}
+
+.simulator code.sim-bases {
+  padding: 0.05em 0.3em;
+  overflow-wrap: anywhere;
+  word-break: break-all;
+}
+
+.sim-bases mark,
+.sim-eol[data-target],
+.sim-gap[data-target] {
+  outline: 2px solid var(--accent);
+  outline-offset: 0;
+  background: var(--mark);
+  color: var(--text);
+}
+
+.sim-eol {
+  display: inline-block;
+  margin-left: 0.2em;
+  padding: 0 0.25em;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--r-chip);
+  color: var(--text-muted);
+  font-family: var(--font-sans);
+  font-size: 0.75em;
+  line-height: 1.4;
+  vertical-align: 0.1em;
+}
+
+.sim-gap {
+  color: var(--text-muted);
+  font-family: var(--font-sans);
+  font-size: 0.9em;
+}
+
+@media (max-width: 599px) {
+  .sim-fai-segment {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  }
+  .sim-fai-content {
+    grid-column: 1 / -1;
+  }
+}
+
+/* Phred decade grid */
+/* The grid fits its box at every width rather than scrolling: the figure is aria-hidden, so a
+   scroll region there could not be reached from the keyboard. */
+.sim-grid {
+  display: grid;
+  gap: 2px;
+}
+
+.sim-grid-row {
+  display: grid;
+  grid-template-columns: 6rem repeat(10, minmax(1.6rem, 1fr));
+  gap: 2px;
+  align-items: stretch;
+}
+
+.sim-grid-head {
+  display: grid;
+  align-content: center;
+  font-size: var(--fs-meta);
+  line-height: 1.2;
+}
+
+.sim-grid-q {
+  color: var(--text);
+  font-weight: 600;
+}
+
+.sim-grid-p {
+  color: var(--text-muted);
+}
+
+.sim-grid-cell {
+  display: grid;
+  place-items: center;
+  min-height: 1.9rem;
+  border: 1px solid var(--border);
+  border-radius: var(--r-chip);
+  background: var(--raised);
+  color: var(--text);
+  font-family: var(--font-mono);
+  cursor: pointer;
+}
+
+.sim-grid-cell[data-bin] {
+  border: 2px dashed var(--border-strong);
+}
+
+.sim-grid-cell[data-current] {
+  border: 2px solid var(--accent);
+  background: var(--accent);
+  color: var(--on-accent);
+  font-weight: 600;
+}
+
+@media (max-width: 599px) {
+  .sim-grid-row {
+    grid-template-columns: auto repeat(10, minmax(0, 1fr));
+  }
+  .sim-grid-p {
+    display: none;
+  }
+}
+
+@media (max-width: 479px) {
+  .sim-grid,
+  .sim-grid-row {
+    gap: 1px;
+  }
+  .sim-grid-head {
+    padding-right: 2px;
+    font-size: 0.6875rem;
+  }
+  .sim-grid-cell {
+    min-height: 1.6rem;
+    font-size: 0.75rem;
+  }
+  .sim-grid-cell[data-bin],
+  .sim-grid-cell[data-current] {
+    border-width: 1.5px;
+  }
+}
+
+/* BGZF diagram: two aligned bars, compressed above and text below */
+.sim-bgzf-track {
+  display: grid;
+  grid-template-columns: 6.5rem minmax(0, 1fr);
+  gap: var(--s-3);
+  align-items: center;
+  margin-bottom: var(--s-2);
+  font-size: var(--fs-meta);
+}
+
+.sim-bgzf-track-label {
+  color: var(--text-muted);
+  font-weight: 600;
+}
+
+.sim-bgzf-bar {
+  display: flex;
+  gap: 2px;
+  min-width: 0;
+}
+
+.sim-bgzf-blocks {
+  position: relative;
+  display: flex;
+  flex: 1 1 auto;
+  gap: 2px;
+  min-width: 0;
+}
+
+.sim-bgzf-block {
+  position: relative;
+  display: flex;
+  flex-basis: 0;
+  flex-direction: column;
+  justify-content: center;
+  min-width: 4.25rem;
+  min-height: 2.75rem;
+  padding: 0 var(--s-1);
+  overflow: hidden;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--r-chip);
+  background: var(--raised);
+  line-height: 1.2;
+  transition:
+    background-color var(--dur-2) var(--ease),
+    opacity var(--dur-2) var(--ease);
+}
+
+.sim-bgzf-block-name {
+  color: var(--text);
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.sim-bgzf-block-at {
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.sim-bgzf-block[data-state="found"] {
+  border: 2px solid var(--accent);
+}
+
+.sim-bgzf-block[data-state="inflated"] {
+  border: 2px solid var(--accent);
+  background: var(--accent-subtle);
+}
+
+.sim-bgzf-block[data-state="skipped"] {
+  border-style: dashed;
+  opacity: 0.55;
+}
+
+.sim-bgzf-fill {
+  position: absolute;
+  inset: 0 auto 0 0;
+  background: var(--accent-subtle);
+  border-right: 2px solid var(--accent);
+  transition: width var(--dur-2) var(--ease);
+}
+
+.sim-bgzf-eof-block {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 3.25rem;
+  min-height: 2.75rem;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--r-chip);
+  background: var(--raised);
+  color: var(--text);
+  font-weight: 600;
+}
+
+.sim-bgzf-eof-block[data-missing] {
+  border-style: dashed;
+  background: none;
+  color: var(--text-muted);
+  font-weight: 400;
+}
+
+.sim-bgzf-eof-block[data-spacer] {
+  visibility: hidden;
+}
+
+.sim-bgzf-marker {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 0;
+  border-left: 2px dashed var(--text);
+  pointer-events: none;
+}
+
+.sim-bgzf-marker[data-reached] {
+  border-left: 3px solid var(--accent);
+}
+
+.sim-bgzf-facts {
+  margin: var(--s-2) 0 0;
+  font-size: var(--fs-meta);
+  font-variant-numeric: tabular-nums;
+}
+
+@media (max-width: 599px) {
+  .sim-bgzf-track {
+    grid-template-columns: minmax(0, 1fr);
+    gap: var(--s-1);
+  }
+  .sim-bgzf-block {
+    min-width: 1.75rem;
+  }
+  .sim-bgzf-block-name {
+    font-size: 0.85em;
+  }
+  .sim-bgzf-block-at {
+    display: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sim-bgzf-block,
+  .sim-bgzf-fill {
+    transition: none;
+  }
+}
+
+/* --- Readout, text view, goals --------------------------------------------------------------- */
+
+.sim-readout-text {
+  margin: 0;
+  padding: var(--s-2) var(--s-3);
+  border-left: 3px solid var(--accent);
+  background: var(--surface);
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+
+.sim-readout-label {
+  color: var(--text-muted);
+  font-weight: 600;
+}
+
+.sim-note {
+  margin: 0;
+  color: var(--text-body);
+  font-size: var(--fs-meta);
+}
+
+/* Table text views share the widget data-table style (widgets.css "Data tables"). */
+.sim-text-caption {
+  margin: 0 0 var(--s-1);
+  color: var(--text-muted);
+  font-size: var(--fs-meta);
+  font-weight: 600;
+  text-align: left;
+}
+
+.sim-text-items {
+  margin: 0;
+  padding-left: 1.6em;
+  font-size: var(--fs-meta);
+}
+
+.sim-text-items li + li {
+  margin-top: var(--s-1);
+}
+
+.sim-goals {
+  padding: var(--s-3) var(--s-4);
+  border: 1px solid var(--border);
+  border-radius: var(--r-control);
+}
+
+.sim-goals-title {
+  margin: 0 0 var(--s-2);
+  color: var(--text);
+  font-weight: 600;
+}
+
+.sim-goals-count {
+  color: var(--text-muted);
+  font-weight: 400;
+}
+
+.sim-goal-list {
+  display: grid;
+  gap: var(--s-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.sim-goal {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: var(--s-2) var(--s-3);
+  align-items: start;
+}
+
+.sim-goal:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+
+.sim-goal-icon {
+  margin-top: 0.2em;
+  color: var(--text-muted);
+}
+
+.sim-goal[data-status="reached"] .sim-goal-icon {
+  color: var(--success);
+}
+
+.sim-goal[data-status="shown"] .sim-goal-icon {
+  color: var(--info);
+}
+
+.sim-goal-body {
+  display: grid;
+  gap: var(--s-1);
+}
+
+.sim-goal-status {
+  color: var(--text-muted);
+  font-size: var(--fs-overline);
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.sim-goal-explanation {
+  color: var(--text-body);
+  font-size: var(--fs-meta);
+}
+
+button.sim-show-me {
+  min-height: 2rem;
+  padding: 0.2rem 0.6rem;
+}
+
+@media (forced-colors: active) {
+  .sim-fai-segment[data-target],
+  .sim-bases mark,
+  .sim-grid-cell[data-current],
+  .sim-bgzf-block[data-state="found"],
+  .sim-bgzf-block[data-state="inflated"] {
+    outline: 2px solid Highlight;
+  }
+  .sim-bgzf-marker {
+    border-left-color: CanvasText;
+  }
+}
+
+@media print {
+  .sim-buttons,
+  .sim-presets,
+  .sim-show-me,
+  .simulator input[type="range"] {
+    display: none;
+  }
+}

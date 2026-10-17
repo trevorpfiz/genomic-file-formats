@@ -1,9 +1,18 @@
 // The dist check itself (docs/PLAN.md 11.5): each gate fails on a crafted file.
+import { createHash } from "node:crypto";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { afterEach, expect, test } from "vite-plus/test";
-import { checkDist, FALLBACK_TEXT, readDenylist } from "../scripts/check-dist.mjs";
+import { afterEach, describe, expect, test } from "vite-plus/test";
+import { apportion, categoryOf } from "../plugins/vite-plugin-size-report.ts";
+import {
+  BUDGETS_KB,
+  checkDist,
+  FALLBACK_TEXT,
+  parseCli,
+  readDenylist,
+  SIZE_LIMIT,
+} from "../scripts/check-dist.mjs";
 
 const URL = "https://example.github.io/course/";
 const fallback = `${FALLBACK_TEXT} Save the file and open it in a desktop browser, or use <a href="${URL}">${URL}</a>.`;
@@ -24,12 +33,13 @@ afterEach(() => {
   for (const dir of dirs.splice(0)) rmSync(dir, { recursive: true, force: true });
 });
 
-const check = (files: Record<string, string>, fonts = 0) =>
+const check = (files: Record<string, string>, fonts = 0, sizeReportDir = dist({})) =>
   checkDist(dist(files), {
     pagesUrl: URL,
     denylist: ["acme"],
     testOnlyMessages: ["FASTA-T99 only in tests"],
     fonts,
+    sizeReportDir,
   });
 
 test("a self-contained file passes", () => {
@@ -82,4 +92,82 @@ test("test-only validator messages fail", () => {
 
 test("the repository denylist names the brand terms", () => {
   expect(readDenylist()).toEqual(["anthropic", "claude"]);
+});
+
+describe("per-category size report", () => {
+  const categories = {
+    "lesson HTML": 3000,
+    "exercise and quiz data": 2000,
+    "case data": 1000,
+    "runtime validators": 500,
+    "app JS and CSS": 420_000,
+  };
+
+  test("uses the build's report for this exact file, and warns over a budget", () => {
+    const html = page("<style>p{color:red}</style>");
+    const hash = createHash("sha256").update(html).digest("hex");
+    const reports = dist({ [`${hash}.json`]: JSON.stringify({ html: hash, js: categories }) });
+    const { report, warnings, errors } = check({ "index.html": html }, 0, reports);
+    expect(errors).toEqual([]);
+    expect(report.find((l) => l.includes("lesson HTML"))).toMatch(/2\.9 KB .*budget 300 KB/);
+    expect(report.find((l) => l.includes("app JS and CSS"))).toMatch(/410\.2 KB/);
+    expect(warnings).toEqual(["app JS and CSS over the 400 KB budget"]);
+  });
+
+  test("without a matching report, content is counted in the JS and the report says so", () => {
+    const reports = dist({ "0000.json": JSON.stringify({ html: "0000", js: categories }) });
+    const { report, warnings } = check({ "index.html": page() }, 0, reports);
+    expect(report.some((l) => l.includes("no per-module size report"))).toBe(true);
+    expect(report.some((l) => l.includes("lesson HTML"))).toBe(false);
+    expect(warnings).toEqual([]);
+  });
+
+  test("apportion splits the minified chunk by per-category weights, adding up to it", () => {
+    const parts = apportion(
+      {
+        "lesson HTML": 48,
+        "exercise and quiz data": 46,
+        "case data": 5,
+        "runtime validators": 8,
+        "app JS and CSS": 248,
+      },
+      710,
+    );
+    expect(parts["lesson HTML"]).toBe(96);
+    expect(parts["app JS and CSS"]).toBe(496);
+    expect(Object.values(parts).reduce((a, b) => a + b, 0)).toBe(710);
+  });
+
+  test("the budgets fit under the hard limit", () => {
+    const sum = Object.values(BUDGETS_KB).reduce((a, b) => a + b, 0);
+    expect(sum * 1024).toBeLessThan(SIZE_LIMIT);
+  });
+
+  test.each([
+    ["\0virtual:lessons", "lesson HTML"],
+    ["/repo/src/exercises/fasta-reference.ts", "exercise and quiz data"],
+    ["/repo/src/quizzes/sequences.ts", "exercise and quiz data"],
+    ["/repo/src/case/generated/fastq.ts", "case data"],
+    ["/repo/src/validators/runtime/fasta.ts", "runtime validators"],
+    ["/repo/src/formats/phred.ts", "runtime validators"],
+    ["/repo/src/widgets/card.ts", "app JS and CSS"],
+    ["/repo/node_modules/preact/dist/preact.module.js", "app JS and CSS"],
+  ])("module %s counts as %s", (id, category) => {
+    expect(categoryOf(id)).toBe(category);
+  });
+});
+
+describe("the command line", () => {
+  test.each([
+    [["dist"], { dir: "dist", fonts: 5 }],
+    [["--fonts", "4", "dist"], { dir: "dist", fonts: 4 }],
+    [["out", "--fonts=0"], { dir: "out", fonts: 0 }],
+    [[], { dir: "dist", fonts: 5 }],
+  ])("%j", (argv, expected) => {
+    expect(parseCli(argv)).toEqual(expected);
+  });
+
+  test("a --fonts value that is not a whole number is refused", () => {
+    expect(() => parseCli(["--fonts", "x", "dist"])).toThrow("--fonts needs a whole number");
+  });
 });

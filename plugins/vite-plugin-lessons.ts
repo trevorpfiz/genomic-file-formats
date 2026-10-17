@@ -1,5 +1,5 @@
-// The lessons plugin: compiles content/lessons/**/*.md into the virtual module `virtual:lessons`
-// and resolves every directive against the exercise registry (docs/PLAN.md 11.1).
+// The lessons plugin: compiles content/lessons/**/*.md and content/*.md into the virtual module
+// `virtual:lessons` and resolves every directive against the content registry (docs/PLAN.md 11.1).
 //
 // The registry is loaded through Vite's own module graph, never with Node's `import()`: Node's
 // ESM cache keeps child modules even when the parent is re-imported with a cache-busting query,
@@ -30,44 +30,67 @@ export const LESSONS_ID = "virtual:lessons";
 const RESOLVED_ID = `\0${LESSONS_ID}`;
 
 export interface LessonsPluginOptions {
-  /** Module exporting `exercises: Record<string, { kind, title }>`. Pure TS, no Vite-only imports. */
+  /**
+   * Module exporting `registry: Record<id, { kind, title }>` (every exercise, snippet and quiz
+   * id a directive may name). Pure TS, no Vite-only imports.
+   */
   registry: string;
-  /** Glob for content files, relative to the root. */
-  content?: string;
+  /** Module exporting `sections: { id: string }[]` (the course manifest); pages' sections must be listed. */
+  course?: string;
+  /** Globs for content files, relative to the root. Order: lessons (sorted), then pages. */
+  content?: string[];
 }
 
+/** The default content globs: every lesson, quiz and capstone file, then home.md and about.md. */
+export const CONTENT_GLOBS = ["content/lessons/**/*.md", "content/*.md"];
+
 interface RegistryModule {
-  exercises: Record<string, { kind: string; title?: string }>;
+  registry: Record<string, { kind: string; title?: string }>;
+}
+interface CourseModule {
+  sections: readonly { id: string }[];
 }
 
 export function lessons(options: LessonsPluginOptions): Plugin {
-  const contentGlob = options.content ?? "content/lessons/**/*.md";
+  const contentGlobs = options.content ?? CONTENT_GLOBS;
   let config: ResolvedConfig;
   let registryPath = "";
+  let coursePath = "";
   let server: ViteDevServer | undefined;
   /** Files the registry was evaluated from, last time it loaded. */
   let registryFiles = new Set<string>();
 
   const isContentFile = (file: string) =>
-    file.endsWith(".md") && normalizePath(relative(config.root, file)).startsWith("content/lessons/");
+    file.endsWith(".md") && normalizePath(relative(config.root, file)).startsWith("content/");
 
-  async function loadRegistry(addWatchFile: (file: string) => void): Promise<Map<string, RegistryEntry>> {
-    let mod: RegistryModule;
+  /** Import a module through Vite's module graph (dev) or a fresh runner (build). */
+  async function load<T>(path: string, addWatchFile: (file: string) => void): Promise<T> {
     const ssr = server?.environments.ssr;
     if (server && ssr && isRunnableDevEnvironment(ssr)) {
-      mod = await ssr.runner.import<RegistryModule>(registryPath);
-      registryFiles = collectFiles(ssr.moduleGraph, registryPath);
-    } else {
-      const result = await runnerImport<RegistryModule>(registryPath, {
-        root: config.root,
-        logLevel: "error",
-      });
-      mod = result.module;
-      registryFiles = new Set([registryPath, ...result.dependencies.map((f) => normalizePath(f))]);
-      registryFiles.forEach(addWatchFile);
+      const mod = await ssr.runner.import<T>(path);
+      for (const f of collectFiles(ssr.moduleGraph, path)) registryFiles.add(f);
+      return mod;
     }
-    if (!mod.exercises) throw new Error(`${options.registry} does not export "exercises"`);
-    return new Map(Object.entries(mod.exercises).map(([id, e]) => [id, { kind: e.kind, title: e.title }]));
+    const result = await runnerImport<T>(path, { root: config.root, logLevel: "error" });
+    const files = [path, ...result.dependencies.map((f) => normalizePath(f))];
+    for (const f of files) {
+      registryFiles.add(f);
+      addWatchFile(f);
+    }
+    return result.module;
+  }
+
+  async function loadRegistry(addWatchFile: (file: string) => void): Promise<Map<string, RegistryEntry>> {
+    registryFiles = new Set();
+    const mod = await load<RegistryModule>(registryPath, addWatchFile);
+    if (!mod.registry) throw new Error(`${options.registry} does not export "registry"`);
+    return new Map(Object.entries(mod.registry).map(([id, e]) => [id, { kind: e.kind, title: e.title }]));
+  }
+
+  async function loadSections(addWatchFile: (file: string) => void): Promise<Set<string> | undefined> {
+    if (!coursePath) return undefined;
+    const mod = await load<CourseModule>(coursePath, addWatchFile);
+    return new Set(mod.sections.map((s) => s.id));
   }
 
   return {
@@ -75,6 +98,7 @@ export function lessons(options: LessonsPluginOptions): Plugin {
     configResolved(resolved) {
       config = resolved;
       registryPath = normalizePath(resolve(config.root, options.registry));
+      if (options.course) coursePath = normalizePath(resolve(config.root, options.course));
     },
     configureServer(devServer) {
       server = devServer;
@@ -84,17 +108,17 @@ export function lessons(options: LessonsPluginOptions): Plugin {
     },
     async load(id) {
       if (id !== RESOLVED_ID) return undefined;
-      const registry = await loadRegistry((file) => this.addWatchFile(file));
-      const files = globSync(contentGlob, { cwd: config.root })
-        .map((f) => normalizePath(resolve(config.root, f)))
-        .sort();
+      const watch = (file: string) => this.addWatchFile(file);
+      const registry = await loadRegistry(watch);
+      const sections = await loadSections(watch);
+      const files = contentFiles(config.root, contentGlobs);
       const release = process.env.COURSE_RELEASE === "1";
       const pages: CompiledPage[] = [];
       for (const file of files) {
         this.addWatchFile(file);
         const source = readFileSync(file, "utf8");
         try {
-          pages.push(await compileLesson(source, file, { registry, release }));
+          pages.push(await compileLesson(source, file, { registry, release, sections }));
         } catch (err) {
           const e = err as { reason?: string; message: string; line?: number; column?: number };
           this.error({
@@ -135,6 +159,20 @@ export function lessons(options: LessonsPluginOptions): Plugin {
       return [...modules, mod];
     },
   };
+}
+
+/** Content files in order: each glob's matches sorted, globs in the given order, no repeats. */
+export function contentFiles(root: string, globs: readonly string[]): string[] {
+  const seen = new Set<string>();
+  const files: string[] = [];
+  for (const glob of globs) {
+    for (const f of globSync(glob, { cwd: root }).sort()) {
+      const file = normalizePath(resolve(root, f));
+      if (!seen.has(file)) files.push(file);
+      seen.add(file);
+    }
+  }
+  return files;
 }
 
 /** Project files reachable from `entry` in an environment's module graph. */

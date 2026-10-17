@@ -1,0 +1,302 @@
+/* Design tokens (ux-design.md 3.4, 4.4, 5.3, 6.2-6.6; docs/PLAN.md 10.3). Every text token passes
+   WCAG AA (4.5:1) on every surface and tint it can sit on, and --border-strong and --accent pass
+   3:1 as control boundaries and focus rings, in both themes; axe checks the rendered states in
+   e2e. M1 refined two dark values for that: --text-muted #A29E95 -> #B2AEA5 (4.57:1 on --mark,
+   4.87:1 on --f5) and --border-strong #7A756C -> #7E7970 (3.13:1 on --accent-subtle).
+
+   Theme mechanics (ux 6.5; docs/PLAN.md 10.3): light values live on :root. Dark values apply when
+   the system prefers dark and the learner has not chosen light, and whenever data-theme="dark" is
+   set on <html> (the no-flash script in index.html sets it before first paint). Print always
+   uses the light values (ux 15). Edit a colour in all four places (light, the two dark blocks,
+   print) or tests/tokens.test.ts fails. */
+
+:root {
+  color-scheme: light;
+  /* Surfaces */
+  --bg: #f9f8f5;
+  --surface: #fdfcfa;
+  --raised: #ffffff;
+  --sunken: #f0eee8;
+  --border: #e2ded6;
+  --border-strong: #8a857b;
+  /* Text */
+  --text: #1c1b19;
+  --text-body: #45433e;
+  --text-muted: #68645c;
+  /* Accent (D-25: teal) and focus */
+  --accent: #0b6b66;
+  --accent-hover: #085551;
+  --accent-subtle: #e2f0ee;
+  --on-accent: #ffffff;
+  --focus: var(--accent);
+  /* Status: always with an icon and a text label, never colour alone */
+  --success: #1d7a3e;
+  --success-bg: #e5f3e9;
+  --error: #b3261e;
+  --error-bg: #fbeae7;
+  --warning: #8a5200;
+  --warning-bg: #fbf0da;
+  --info: #2b5aa8;
+  --info-bg: #e6eefa;
+  --mark: #ffedb0;
+  /* Case file callouts and the badge */
+  --case-bg: #f5efe3;
+  --case-border: #d9cbb0;
+  --gold: #8c6200;
+  --gold-fill: #e2b84a;
+  /* Elevation: popovers, drag ghosts and dialogs only; cards are flat */
+  --shadow-pop: 0 1px 2px rgb(28 27 25 / 0.08), 0 8px 24px rgb(28 27 25 / 0.12);
+  /* Field tints f1-f8 (ux 6.4), always paired with a non-colour cue */
+  --f1: #dceaf9;
+  --f2: #fce5cc;
+  --f3: #dcefe2;
+  --f4: #ece2f6;
+  --f5: #f8efc4;
+  --f6: #d5eeee;
+  --f7: #f8dce6;
+  --f8: #e8e5df;
+  /* Base colours for the opt-in "Color bases" toggle (ux 6.4); the letter carries the meaning */
+  --base-a: #1a7334;
+  --base-c: #1f5bb8;
+  --base-g: #9a5700;
+  --base-t: #b42330;
+  --base-other: var(--text-muted);
+
+  /* Fonts (D-24; fallback stacks from ux 5.3). Mono never uses ligatures. */
+  --font-serif:
+    "Source Serif 4", "Iowan Old Style", "Charter", "Bitstream Charter", "Sitka Text", Cambria, Georgia, serif;
+  --font-sans:
+    "Public Sans", system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --font-mono:
+    "IBM Plex Mono", ui-monospace, "SF Mono", "Cascadia Mono", "Segoe UI Mono", Menlo, Consolas,
+    "Liberation Mono", monospace;
+
+  /* Type scale (ux 4.4; docs/PLAN.md 10.2), md and up; the phone sizes are the -sm tokens. */
+  --fs-h1: 2.625rem; /* 42/46, Source Serif 4 500 */
+  --lh-h1: 1.095;
+  --fs-h1-sm: 2.125rem; /* 34/38 */
+  --fs-h2: 1.75rem; /* 28/35, Source Serif 4 500 */
+  --lh-h2: 1.25;
+  --fs-h2-sm: 1.5rem; /* 24/30 */
+  --fs-h3: 1.25rem; /* 20/27, Public Sans 600 */
+  --lh-h3: 1.35;
+  --fs-h3-sm: 1.125rem; /* 18/25 */
+  --fs-body: 1.125rem; /* 18/30, Public Sans 400 */
+  --lh-body: 1.667;
+  --fs-body-sm: 1.0625rem; /* 17/27 */
+  --fs-ui: 0.9375rem; /* 15/22: TOC, outline, buttons */
+  --lh-ui: 1.467;
+  --fs-meta: 0.875rem; /* 14/20: captions, meta, pills */
+  --fs-overline: 0.75rem; /* 12/16, 600, uppercase, letter-spacing 0.08em */
+  --fs-code: 0.86em; /* inline code chips */
+  --fs-code-block: 0.90625rem; /* 14.5/23 */
+  --fs-snippet: 0.875rem; /* 14/22; interactive modes use a line height of at least 26px */
+  --fs-control-coarse: 1rem; /* inputs on coarse pointers, so iOS does not zoom (V-41) */
+
+  /* Spacing scale, 4px base (ux 3.4) */
+  --s-1: 0.25rem;
+  --s-2: 0.5rem;
+  --s-3: 0.75rem;
+  --s-4: 1rem;
+  --s-5: 1.25rem;
+  --s-6: 1.5rem;
+  --s-7: 2rem;
+  --s-8: 2.5rem;
+  --s-9: 3rem;
+  --s-10: 4rem;
+
+  /* Radii */
+  --r-chip: 6px;
+  --r-control: 8px;
+  --r-card: 14px;
+  --r-dialog: 18px;
+  --r-pill: 999px;
+
+  /* Layers: dialogs use the top layer (showModal) */
+  --z-content: 0;
+  --z-aside: 10;
+  --z-topbar: 20;
+  --z-popover: 30;
+
+  /* Layout (docs/PLAN.md 10.1) */
+  --content-max: 44rem;
+  --aside-width: 18rem;
+  --container-max: 80rem; /* 1280px */
+  --wide-max: 72rem; /* capstone wide mode */
+  --topbar-height: 48px;
+
+  /* Motion (ux 6.6); reduced motion removes transforms (see base styles) */
+  --dur-1: 120ms;
+  --dur-2: 200ms;
+  --dur-3: 320ms;
+  --ease: cubic-bezier(0.2, 0.7, 0.2, 1);
+}
+
+:root[data-theme="light"] {
+  color-scheme: light;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    /* Surfaces */
+    --bg: #1a1917;
+    --surface: #201f1c;
+    --raised: #252421;
+    --sunken: #2e2c28;
+    --border: #3b3934;
+    --border-strong: #7e7970;
+    /* Text */
+    --text: #f2f0eb;
+    --text-body: #d5d2ca;
+    --text-muted: #b2aea5;
+    /* Accent (D-25: teal) and focus */
+    --accent: #5ec4ba;
+    --accent-hover: #80d4cb;
+    --accent-subtle: #163330;
+    --on-accent: #1a1917;
+    --focus: var(--accent);
+    /* Status: always with an icon and a text label, never colour alone */
+    --success: #63c985;
+    --success-bg: #15301f;
+    --error: #f28b80;
+    --error-bg: #3b1c19;
+    --warning: #e6b45e;
+    --warning-bg: #362a14;
+    --info: #8ab4f8;
+    --info-bg: #1b2940;
+    --mark: #4b4120;
+    /* Case file callouts and the badge */
+    --case-bg: #2a251c;
+    --case-border: #4d4332;
+    --gold: #e2b84a;
+    --gold-fill: #e2b84a;
+    /* Elevation: popovers, drag ghosts and dialogs only; cards are flat */
+    --shadow-pop: 0 8px 24px rgb(0 0 0 / 0.5);
+    /* Field tints f1-f8 (ux 6.4), always paired with a non-colour cue */
+    --f1: #1f3651;
+    --f2: #4a3217;
+    --f3: #1d3e2a;
+    --f4: #372b4c;
+    --f5: #443e18;
+    --f6: #163f40;
+    --f7: #4b2434;
+    --f8: #35332f;
+    /* Base colours for the opt-in "Color bases" toggle (ux 6.4); the letter carries the meaning */
+    --base-a: #6bcb86;
+    --base-c: #7faef5;
+    --base-g: #e3a857;
+    --base-t: #f28a8f;
+    --base-other: var(--text-muted);
+  }
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  /* Surfaces */
+  --bg: #1a1917;
+  --surface: #201f1c;
+  --raised: #252421;
+  --sunken: #2e2c28;
+  --border: #3b3934;
+  --border-strong: #7e7970;
+  /* Text */
+  --text: #f2f0eb;
+  --text-body: #d5d2ca;
+  --text-muted: #b2aea5;
+  /* Accent (D-25: teal) and focus */
+  --accent: #5ec4ba;
+  --accent-hover: #80d4cb;
+  --accent-subtle: #163330;
+  --on-accent: #1a1917;
+  --focus: var(--accent);
+  /* Status: always with an icon and a text label, never colour alone */
+  --success: #63c985;
+  --success-bg: #15301f;
+  --error: #f28b80;
+  --error-bg: #3b1c19;
+  --warning: #e6b45e;
+  --warning-bg: #362a14;
+  --info: #8ab4f8;
+  --info-bg: #1b2940;
+  --mark: #4b4120;
+  /* Case file callouts and the badge */
+  --case-bg: #2a251c;
+  --case-border: #4d4332;
+  --gold: #e2b84a;
+  --gold-fill: #e2b84a;
+  /* Elevation: popovers, drag ghosts and dialogs only; cards are flat */
+  --shadow-pop: 0 8px 24px rgb(0 0 0 / 0.5);
+  /* Field tints f1-f8 (ux 6.4), always paired with a non-colour cue */
+  --f1: #1f3651;
+  --f2: #4a3217;
+  --f3: #1d3e2a;
+  --f4: #372b4c;
+  --f5: #443e18;
+  --f6: #163f40;
+  --f7: #4b2434;
+  --f8: #35332f;
+  /* Base colours for the opt-in "Color bases" toggle (ux 6.4); the letter carries the meaning */
+  --base-a: #6bcb86;
+  --base-c: #7faef5;
+  --base-g: #e3a857;
+  --base-t: #f28a8f;
+  --base-other: var(--text-muted);
+}
+
+@media print {
+  :root,
+  :root[data-theme="dark"],
+  :root:not([data-theme="light"]) {
+    color-scheme: light;
+    /* Surfaces */
+    --bg: #f9f8f5;
+    --surface: #fdfcfa;
+    --raised: #ffffff;
+    --sunken: #f0eee8;
+    --border: #e2ded6;
+    --border-strong: #8a857b;
+    /* Text */
+    --text: #1c1b19;
+    --text-body: #45433e;
+    --text-muted: #68645c;
+    /* Accent (D-25: teal) and focus */
+    --accent: #0b6b66;
+    --accent-hover: #085551;
+    --accent-subtle: #e2f0ee;
+    --on-accent: #ffffff;
+    --focus: var(--accent);
+    /* Status: always with an icon and a text label, never colour alone */
+    --success: #1d7a3e;
+    --success-bg: #e5f3e9;
+    --error: #b3261e;
+    --error-bg: #fbeae7;
+    --warning: #8a5200;
+    --warning-bg: #fbf0da;
+    --info: #2b5aa8;
+    --info-bg: #e6eefa;
+    --mark: #ffedb0;
+    /* Case file callouts and the badge */
+    --case-bg: #f5efe3;
+    --case-border: #d9cbb0;
+    --gold: #8c6200;
+    --gold-fill: #e2b84a;
+    /* Elevation: popovers, drag ghosts and dialogs only; cards are flat */
+    --shadow-pop: 0 1px 2px rgb(28 27 25 / 0.08), 0 8px 24px rgb(28 27 25 / 0.12);
+    /* Field tints f1-f8 (ux 6.4), always paired with a non-colour cue */
+    --f1: #dceaf9;
+    --f2: #fce5cc;
+    --f3: #dcefe2;
+    --f4: #ece2f6;
+    --f5: #f8efc4;
+    --f6: #d5eeee;
+    --f7: #f8dce6;
+    --f8: #e8e5df;
+    /* Base colours for the opt-in "Color bases" toggle (ux 6.4); the letter carries the meaning */
+    --base-a: #1a7334;
+    --base-c: #1f5bb8;
+    --base-g: #9a5700;
+    --base-t: #b42330;
+    --base-other: var(--text-muted);
+  }
+}
