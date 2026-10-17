@@ -717,6 +717,7 @@ button.sheet-tab[aria-selected="true"] {
   color: var(--text-muted);
   font-size: var(--fs-meta);
   line-height: 1.5;
+  overflow-wrap: anywhere;
 }
 
 .site-footer:empty {

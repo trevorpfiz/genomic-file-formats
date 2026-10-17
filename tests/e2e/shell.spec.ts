@@ -11,6 +11,7 @@ import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import { AxeBuilder } from "@axe-core/playwright";
+import { settleAnimations } from "./settle.ts";
 import { expect, test, type Browser, type Page } from "@playwright/test";
 import { outlineItems, pages as manifest } from "../../content/course.ts";
 
@@ -116,6 +117,7 @@ async function stored(page: Page): Promise<Stored | null> {
 const stateOf = (s: Stored | null, id: string) => s?.lessons[id.split("/")[0]!]?.exercises[id]?.state;
 
 async function axeSerious(page: Page): Promise<string[]> {
+  await settleAnimations(page);
   const results = await new AxeBuilder({ page })
     .withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "wcag22aa"])
     .analyze();

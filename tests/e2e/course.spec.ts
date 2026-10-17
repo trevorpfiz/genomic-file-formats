@@ -6,6 +6,7 @@
 import { resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import { AxeBuilder } from "@axe-core/playwright";
+import { settleAnimations } from "./settle.ts";
 import { expect, test, type Page } from "@playwright/test";
 import { pagesUrl } from "../../scripts/pages-url.mjs";
 
@@ -153,6 +154,7 @@ for (const colorScheme of ["light", "dark"] as const) {
     await page.emulateMedia({ colorScheme });
     await page.goto(`${COURSE}#/lesson/fastq-reads`);
     await expect(page.locator("h1")).toHaveText("From molecules to reads: FASTQ");
+    await settleAnimations(page);
     const results = await new AxeBuilder({ page })
       .withTags(["wcag2a", "wcag2aa", "wcag21aa", "wcag22aa"])
       .analyze();

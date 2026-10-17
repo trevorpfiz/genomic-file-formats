@@ -10,6 +10,7 @@ import { resolve } from "node:path";
 import { readFile } from "node:fs/promises";
 import { pathToFileURL } from "node:url";
 import { AxeBuilder } from "@axe-core/playwright";
+import { settleAnimations } from "./settle.ts";
 import { expect, test, type Page } from "@playwright/test";
 
 const COURSE = pathToFileURL(resolve("dist/index.html")).href;
@@ -546,6 +547,7 @@ for (const colorScheme of ["light", "dark"] as const) {
     await page.locator('#e2e-sort [data-item="i2"] .sort-handle').click();
     await page.locator('#e2e-explorer [data-key="F1"]').focus();
     await expect(page.locator("#e2e-explorer .fe-popover")).toBeVisible();
+    await settleAnimations(page);
     const results = await new AxeBuilder({ page })
       .include("#e2e-fixtures")
       .withTags(["wcag2a", "wcag2aa", "wcag21aa", "wcag22aa"])

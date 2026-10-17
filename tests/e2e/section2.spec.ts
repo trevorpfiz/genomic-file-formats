@@ -12,6 +12,7 @@ import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import { AxeBuilder } from "@axe-core/playwright";
+import { settleAnimations } from "./settle.ts";
 import { expect, test, type Browser, type Locator, type Page } from "@playwright/test";
 import { pages as manifest } from "../../content/course.ts";
 import { exercises } from "../../src/exercises/registry.ts";
@@ -50,6 +51,7 @@ function watch(page: Page, file = COURSE): string[] {
 }
 
 async function axeSerious(page: Page, label: string): Promise<string[]> {
+  await settleAnimations(page);
   const results = await new AxeBuilder({ page })
     .withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "wcag22aa"])
     .analyze();
@@ -505,11 +507,29 @@ for (const colorScheme of ["light", "dark"] as const) {
 test("at 360 px no Section 2 page scrolls sideways", async ({ page }) => {
   await page.setViewportSize({ width: 360, height: 800 });
   const overflow = async (label: string) => {
-    const [scroll, view] = await page.evaluate(() => [
-      document.documentElement.scrollWidth,
-      document.documentElement.clientWidth,
-    ]);
-    return scroll > view ? [`${label}: page is ${scroll} px wide in a ${view} px viewport`] : [];
+    const { scroll, view, culprits } = await page.evaluate(() => {
+      const view = document.documentElement.clientWidth;
+      // Name the elements that stick out past the viewport outside any scroll region, so a
+      // failure in CI (where engines and fonts differ from local runs) says what to fix.
+      const scrolls = (el: Element | null): boolean => {
+        for (let s = el; s && s !== document.body; s = s.parentElement) {
+          if (/auto|scroll|hidden|clip/.test(getComputedStyle(s).overflowX)) return true;
+        }
+        return false;
+      };
+      const culprits = [...document.querySelectorAll("body *")]
+        .filter((el) => el.getBoundingClientRect().right > view + 0.5 && !scrolls(el.parentElement))
+        .slice(0, 5)
+        .map((el) => {
+          const tag = el.tagName.toLowerCase() + [...el.classList].map((c) => `.${c}`).join("");
+          const text = (el.textContent ?? "").trim().slice(0, 40);
+          return `${tag} (right ${Math.round(el.getBoundingClientRect().right)}) "${text}"`;
+        });
+      return { scroll: document.documentElement.scrollWidth, view, culprits };
+    });
+    return scroll > view
+      ? [`${label}: page is ${scroll} px wide in a ${view} px viewport; ${culprits.join("; ")}`]
+      : [];
   };
   const found: string[] = [];
   for (const entry of [...LESSONS, QUIZ]) {
