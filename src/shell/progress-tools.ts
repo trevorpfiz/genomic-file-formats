@@ -8,6 +8,10 @@ import { decodeProgress, encodeProgress, ProgressCodeError, summarize } from "./
 import type { CourseStore } from "./progress-store.ts";
 import type { ProgressState } from "./progress-types.ts";
 
+/** Shown when a progress code cannot be made at all (copy buttons catch and show it). */
+export const CODE_FAILED =
+  "The progress code could not be made in this browser. Use Download progress (.json) instead.";
+
 /** Encode the current progress and try to copy it. */
 export async function copyProgressCode(store: CourseStore): Promise<{ code: string; copied: boolean }> {
   store.flush();
@@ -64,11 +68,15 @@ export function progressTools(store: CourseStore, idPrefix: string): HTMLElement
       class: "button-secondary",
       onclick: async () => {
         status.textContent = "";
-        const { code, copied } = await copyProgressCode(store);
-        field.show(code);
-        status.textContent = copied
-          ? "Copied to clipboard. Paste it into the other copy of the course."
-          : COPY_FAILED;
+        try {
+          const { code, copied } = await copyProgressCode(store);
+          field.show(code);
+          status.textContent = copied
+            ? "Copied to clipboard. Paste it into the other copy of the course."
+            : COPY_FAILED;
+        } catch {
+          status.textContent = CODE_FAILED;
+        }
       },
     },
     iconSpan("copy"),

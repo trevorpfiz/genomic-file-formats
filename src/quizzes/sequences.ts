@@ -14,6 +14,7 @@ import type {
   McqOption,
   ParametricGenerator,
   Quiz,
+  QuizVariant,
   ReferenceItem,
   Rng,
   Snippet,
@@ -208,7 +209,7 @@ function faiVariant(id: string, s: FaiSpec): ComputedMcq {
       id: "key",
       text: chip(key),
       correct: true,
-      explanation: `p = ${comma(p)}: ${comma(lines)} full line${lines === 1 ? "" : "s"} of ${s.lineWidth} bytes, then ${rest} more. ${s.offset} + ${lines} × ${s.lineWidth} + ${rest} = ${key}.`,
+      explanation: `p = ${comma(p)}: ${comma(lines)} full line${lines === 1 ? "" : "s"} of ${s.lineWidth} bytes, then ${rest} more. ${chip(s.offset)} + ${comma(lines)} × ${s.lineWidth} + ${rest} = ${chip(key)}.`,
     },
     {
       id: "no-newline",
@@ -277,7 +278,8 @@ const faiGenerator: ParametricGenerator<McqExercise> = {
 // ---------------------------------------------------------------------------------------------
 // 2.3 · mcq, recognition (seq 6, Q6): the head of a `.fa.gz`. Bytes made on 2026-10-17 from the
 // same 61-base FASTA: plain gzip by GNU gzip (FLG 08, a file name), BGZF by a zlib block built to
-// SAMv1 §4.1 (FLG 04, XLEN 6, the `BC` subfield, BSIZE).
+// SAMv1 §4.1 (FLG 04, XLEN 6, the `BC` subfield, BSIZE). The viewer hides the identity (the
+// badge would name the answer), so the stem does not name the file either.
 
 const hexHead = (head: string, format: "gzip" | "bgzf", annotations: HexAnnotation[]): Snippet => ({
   filename: "ref.fa.gz",
@@ -304,7 +306,7 @@ const recognition = (
   formats,
   concepts: ["compression.gzip-vs-bgzf", "recognition.first-bytes"],
   multi: false,
-  stem: "These are the first bytes of `ref.fa.gz`, a compressed FASTA. Can `samtools faidx` index it as it is?",
+  stem: "These are the first bytes of a compressed FASTA. Can `samtools faidx` index the file as it is?",
   snippet,
   options,
 });
@@ -320,7 +322,7 @@ const bgzfHead = recognition(
   [
     {
       id: "bgzf",
-      text: "Yes. It is BGZF, so `samtools faidx` writes `ref.fa.gz.fai` and `ref.fa.gz.gzi`.",
+      text: "Yes. It is BGZF, so `samtools faidx` writes a `.fai` and a `.gzi`.",
       correct: true,
       explanation:
         "Flag `04` announces an extra field, and `42 43` spells `BC`: a BGZF block. The `.gzi` maps compressed offsets to uncompressed ones.",
@@ -373,7 +375,7 @@ const gzipHead = recognition(
     },
     {
       id: "rename",
-      text: "Yes, once it is renamed to `ref.fa.bgz`.",
+      text: "Yes, once its extension is changed to `.bgz`.",
       correct: false,
       explanation: "Renaming changes no bytes, so samtools still sees one gzip stream.",
     },
@@ -422,7 +424,7 @@ const errorsA = errorsMcq(`${QUIZ}/2.4/a`, ")))))", [
     id: "thousandths",
     text: "About 0.04",
     correct: false,
-    explanation: "This reads Q8 as P = 0.008. Q8 means P = 10^{-0.8} = 0.158.",
+    explanation: "This reads Q8 as P = 0.008. Q8 means P = 10^{−0.8} = 0.158.",
   },
   {
     id: "sum-q",
@@ -670,50 +672,54 @@ const nextFile = lo7(
         "The `.fai` only speeds up lookups in the FASTA you already have. It says nothing about the reads.",
     },
     {
-      id: "masked",
-      text: "Which reference bases are repeats; a second FASTQ file answers it.",
+      id: "variants",
+      text: "How each genome differs from the reference; a VCF called straight from the FASTQ files answers it next.",
       correct: false,
       explanation:
-        "The FASTA itself marks repeats, as soft-masked lowercase bases. FASTQ files hold reads, not the reference.",
+        "That question is open too, but a variant caller needs placed reads. Alignment to SAM or BAM comes first, then the VCF.",
     },
   ],
 );
 
-const faiAnswers = lo7(
-  `${QUIZ}/2.6/b`,
-  "What does a .fai answer?",
-  ["fai", "fasta"],
-  "A FASTA comes with its `.fai` index. What does the `.fai` answer, and what can it not tell you?",
-  [
-    {
-      id: "bytes",
-      text: "Where each sequence's bases sit in this one file; nothing about the bases or any sample.",
-      correct: true,
-      explanation:
-        "A `.fai` holds a name, a length and byte geometry per sequence, for one file. It stores no bases, reads or qualities.",
-    },
-    {
-      id: "reads",
-      text: "Where each read belongs on the reference; nothing about how good the reads are.",
-      correct: false,
-      explanation:
-        "Placing reads is the aligner's job, recorded in SAM or BAM. A `.fai` knows nothing about reads.",
-    },
-    {
-      id: "compressed",
-      text: "The bases of each sequence, stored in compact form; nothing about where they sit.",
-      correct: false,
-      explanation: "A `.fai` stores no bases at all: five numbers per sequence that point into the FASTA.",
-    },
-    {
-      id: "any-copy",
-      text: "Where each base sits in any copy of GRCh38; nothing about how good each base is.",
-      correct: false,
-      explanation:
-        "Copies wrap their lines differently, so a `.fai` is valid only for the exact file it was built from.",
-    },
-  ],
-);
+/** Variant B is taught by L05's At-a-glance card, so its "Review:" link goes there. */
+const faiAnswers: QuizVariant = {
+  tests: "random-access#recap",
+  ...lo7(
+    `${QUIZ}/2.6/b`,
+    "What does a .fai answer?",
+    ["fai", "fasta"],
+    "A FASTA comes with its `.fai` index. What does the `.fai` answer, and what can it not tell you?",
+    [
+      {
+        id: "bytes",
+        text: "Where each sequence's bases sit in this one file; nothing about the bases or any sample.",
+        correct: true,
+        explanation:
+          "A `.fai` holds a name, a length and byte geometry per sequence, for one file. It stores no bases, reads or qualities.",
+      },
+      {
+        id: "reads",
+        text: "Where each read belongs on the reference; nothing about how good the reads are.",
+        correct: false,
+        explanation:
+          "Placing reads is the aligner's job, recorded in SAM or BAM. A `.fai` knows nothing about reads.",
+      },
+      {
+        id: "compressed",
+        text: "The bases of each sequence, stored in compact form; nothing about where they sit.",
+        correct: false,
+        explanation: "A `.fai` stores no bases at all: five numbers per sequence that point into the FASTA.",
+      },
+      {
+        id: "any-copy",
+        text: "Where each base sits in any copy of GRCh38; nothing about how good each base is.",
+        correct: false,
+        explanation:
+          "Copies wrap their lines differently, so a `.fai` is valid only for the exact file it was built from.",
+      },
+    ],
+  ),
+};
 
 // ---------------------------------------------------------------------------------------------
 // Reference card: the `.fai` formula (p 0-based), the Phred formula and the Phred+33 table.

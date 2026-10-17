@@ -542,4 +542,20 @@ describe("minutes model", () => {
     expect(report.errors.join()).toMatch(/outside 8-12/);
     expect(report.total).toBeCloseTo(193 - 9 + a.estimate);
   });
+
+  test("the bounds use the unrounded estimate; under 8 at the 600-word cap only warns (D-05)", () => {
+    const a = { ...lesson(GOOD), id: "fasta-reference", minutes: 8, interactionMinutes: 3.75 };
+    const at = (proseWords: number) => {
+      const estimate = proseWords / 150 + a.interactionMinutes;
+      return lintMinutes([{ ...a, proseWords, estimate }]);
+    };
+    // 599 words: 7.74 min, which rounds to 8 but is under the floor; written to the cap.
+    const capped = at(599);
+    expect(capped.errors.join()).not.toMatch(/fasta-reference|x\.md/);
+    expect(capped.warnings.join()).toMatch(
+      /7\.74 min, under the 8-minute floor at the 600-word cap; it may keep up to 638 prose words \(D-05\)/,
+    );
+    // 560 words: 7.48 min, below the cap, so more prose is allowed and the lint fails.
+    expect(at(560).errors.join()).toMatch(/7\.48 min, outside 8-12/);
+  });
 });

@@ -6,7 +6,7 @@ import { COPY_FAILED } from "../ui/copy.ts";
 import { SITE } from "./course-model.ts";
 import { h, iconSpan } from "./dom.ts";
 import type { CourseStore, MemoryReason } from "./progress-store.ts";
-import { codeField, copyProgressCode } from "./progress-tools.ts";
+import { CODE_FAILED, codeField, copyProgressCode } from "./progress-tools.ts";
 
 const TEXT: Record<MemoryReason, string> = {
   unavailable:
@@ -40,9 +40,13 @@ export function storageNotice(store: CourseStore, pagesUrl: string, onDismiss: (
           type: "button",
           class: "button-secondary",
           onclick: async () => {
-            const { code, copied } = await copyProgressCode(store);
-            field.show(code);
-            status.textContent = copied ? "Copied to clipboard." : COPY_FAILED;
+            try {
+              const { code, copied } = await copyProgressCode(store);
+              field.show(code);
+              status.textContent = copied ? "Copied to clipboard." : COPY_FAILED;
+            } catch {
+              status.textContent = CODE_FAILED;
+            }
           },
         },
         iconSpan("copy"),
@@ -69,14 +73,14 @@ export function footerContent(persistent: boolean, version: string): Node[] {
       iconSpan(persistent ? "circle-check" : "triangle-alert"),
       persistent ? "Progress saved in this browser" : "Progress not saved",
     ),
+    // One list item each, so assistive technology never runs them together; the dots between
+    // them are drawn by CSS (layout.css .footer-links).
     h(
-      "p",
+      "ul",
       { class: "footer-links" },
-      h("a", { href: "#/about" }, "About this course"),
-      h("span", { "aria-hidden": "true", class: "footer-sep" }, "·"),
-      `${SITE} is MIT licensed`,
-      h("span", { "aria-hidden": "true", class: "footer-sep" }, "·"),
-      `Version ${version}`,
+      h("li", null, h("a", { href: "#/about" }, "About this course")),
+      h("li", null, `${SITE} is MIT licensed`),
+      h("li", null, `Version ${version}`),
     ),
   ];
 }

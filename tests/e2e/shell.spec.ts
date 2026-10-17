@@ -2,9 +2,11 @@
 // renders with its title, switcher and theme control; lesson TOCs end in Recap and follow
 // scrolling; the switcher, outline, top bar and sheet work from the keyboard; the theme
 // applies before first paint; progress survives a reload and merges across pages and copies
-// (D-36); without storage the notice shows and the progress code round-trips (D-29, D-23);
-// axe finds nothing serious on any route, in light and dark.
+// (D-36); without storage the notice shows and the progress code round-trips (D-29, D-23),
+// also uncompressed (GF1U); "Download progress (.json)" works over file://; picked items keep an
+// outline under forced colours; axe finds nothing serious on any route, in light and dark.
 import { copyFileSync, mkdtempSync } from "node:fs";
+import { readFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
@@ -568,6 +570,98 @@ test("without storage: the notice, 'Progress not saved', and a progress code tha
   await expect(other.getByLabel("Paste a progress code")).toHaveAttribute("aria-invalid", "true");
   await expect(other.locator(".code-import .field-message")).toContainText("damaged");
   await fresh.close();
+});
+
+test("without deflate-raw: an uncompressed GF1U code that a normal browser imports (V-40)", async ({
+  browser,
+}) => {
+  // As in older engines: no compression streams at all.
+  const old = await browser.newContext();
+  await old.addInitScript(() => {
+    delete (window as { CompressionStream?: unknown }).CompressionStream;
+    delete (window as { DecompressionStream?: unknown }).DecompressionStream;
+  });
+  const page = await old.newPage();
+  const problems = watch(page);
+  const lesson = builtLessons[0]!;
+  await open(page, lesson.route);
+  const id = `${lesson.id}/e2e-gf1u`;
+  await solvePredict(page, id);
+  await open(page, "#/about");
+  await page.getByRole("button", { name: "Copy progress code" }).click();
+  const field = page.getByRole("textbox", { name: "Your progress code" });
+  await expect(field).toHaveValue(/^GF1U\./);
+  const code = await field.inputValue();
+  expect(problems).toEqual([]);
+  await old.close();
+
+  const fresh = await browser.newContext();
+  const other = await fresh.newPage();
+  await open(other, "#/about");
+  await other.getByLabel("Paste a progress code").fill(code);
+  await other.getByRole("button", { name: "Import" }).click();
+  await other.getByRole("button", { name: "Merge" }).click();
+  await expect(other.locator(".code-import .field-message")).toHaveText("Progress imported and merged.");
+  await expect.poll(async () => stateOf(await stored(other), id)).toBe("correct");
+  await fresh.close();
+});
+
+test("Download progress (.json) saves the stored state over file:// (D-27)", async ({ page }) => {
+  const problems = watch(page);
+  const lesson = builtLessons[0]!;
+  await open(page, lesson.route);
+  const id = `${lesson.id}/e2e-download`;
+  await solvePredict(page, id);
+  await open(page, "#/about");
+  const download = page.waitForEvent("download");
+  await page.getByRole("button", { name: "Download progress (.json)" }).click();
+  const file = await download;
+  expect(file.suggestedFilename()).toMatch(/^genomic-file-formats-progress-\d{4}-\d{2}-\d{2}\.json$/);
+  const saved = JSON.parse(await readFile((await file.path())!, "utf8")) as Stored;
+  expect(stateOf(saved, id)).toBe("correct");
+  expect(saved).toEqual(await stored(page));
+  expect(problems).toEqual([]);
+});
+
+test.describe("forced colours (Windows High Contrast)", () => {
+  test.use({ forcedColors: "active" });
+
+  test("a picked line and a picked sort item keep a visible outline; screenshot for review", async ({
+    page,
+  }, testInfo) => {
+    const problems = watch(page);
+    const lesson = builtLessons.find((l) => l.id === "fastq-in-the-wild") ?? builtLessons.at(-1)!;
+    await open(page, lesson.route);
+    const cell = page.locator("gf-spot-the-error [role=gridcell]").first();
+    await cell.click();
+    await expect(cell).toHaveAttribute("aria-selected", "true");
+    const handle = page.locator("gf-sort .sort-handle").first();
+    await handle.focus();
+    await page.keyboard.press("Space");
+    const item = page.locator("gf-sort .sort-item[data-picked]").first();
+    await expect(item).toHaveCount(1);
+    const outlines = await Promise.all(
+      [cell, item].map((l) =>
+        l.evaluate((el) => {
+          const style = getComputedStyle(el);
+          return `${style.outlineStyle} ${style.outlineWidth}`;
+        }),
+      ),
+    );
+    expect(
+      outlines.every((o) => o.startsWith("solid") && !o.endsWith(" 0px")),
+      outlines.join(),
+    ).toBe(true);
+    await testInfo.attach("forced-colours-spot", {
+      body: await page.locator("gf-spot-the-error").first().screenshot(),
+      contentType: "image/png",
+    });
+    await testInfo.attach("forced-colours-sort", {
+      body: await page.locator("gf-sort").first().screenshot(),
+      contentType: "image/png",
+    });
+    expect(problems).toEqual([]);
+  });
 });
 
 // ---------------------------------------------------------------------------------------------

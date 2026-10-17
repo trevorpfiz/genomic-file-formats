@@ -29,6 +29,9 @@ export class SpotTheErrorElement extends HTMLElement {
     const howTo = exercise.singlePick
       ? `Select the ${unit} you think is wrong.`
       : `Select each ${unit} you think is wrong (arrow keys move, Space selects), then select Check.`;
+    const quizHowTo = exercise.singlePick
+      ? howTo
+      : `Select each ${unit} you think is wrong (arrow keys move, Space selects).`;
     card = new ExerciseCard(
       this,
       exercise,
@@ -38,6 +41,7 @@ export class SpotTheErrorElement extends HTMLElement {
       ),
       {
         howTo: exercise.howTo ?? howTo,
+        quizHowTo,
       },
     );
     this.card = card;

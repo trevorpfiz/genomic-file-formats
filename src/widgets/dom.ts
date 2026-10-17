@@ -108,3 +108,28 @@ export function liveRegion(doc: Document): HTMLParagraphElement & { say(text: st
 
 /** Elements a click handler on a container should leave alone. */
 export const INTERACTIVE = "button, a, input, select, textarea, summary, label, [role=gridcell], [tabindex]";
+
+// One listener for the 600 px breakpoint serves every viewer that redraws across it. Owners are
+// held weakly (their redraw function lives in a WeakMap keyed by the owner), so the viewers of a
+// page that has been navigated away can be collected; nothing is removed by hand.
+const NARROW = "(max-width: 599px)";
+const redraws = new WeakMap<Element, (narrow: boolean) => void>();
+const owners = new Set<WeakRef<Element>>();
+let narrowQuery: MediaQueryList | undefined;
+
+/** Call `redraw(narrow)` whenever the window crosses 600 px, while `owner` is in the page. */
+export function onBreakpoint(owner: Element, redraw: (narrow: boolean) => void): void {
+  const win = owner.ownerDocument.defaultView;
+  if (!win?.matchMedia || typeof WeakRef !== "function") return;
+  redraws.set(owner, redraw);
+  owners.add(new WeakRef(owner));
+  if (narrowQuery) return;
+  narrowQuery = win.matchMedia(NARROW);
+  narrowQuery.addEventListener?.("change", (event) => {
+    for (const ref of owners) {
+      const node = ref.deref();
+      if (!node) owners.delete(ref);
+      else if (node.isConnected) redraws.get(node)?.(event.matches);
+    }
+  });
+}

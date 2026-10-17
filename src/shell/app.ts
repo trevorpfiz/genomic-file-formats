@@ -70,8 +70,10 @@ export class Shell {
   }
 
   start(): void {
-    // The static no-JavaScript fallback (D-28) is replaced at boot.
-    this.#main.replaceChildren(this.#noticeSlot, this.#pageRoot);
+    // The static no-JavaScript fallback (D-28) stays (hidden by the `js` class) until the first
+    // page has rendered, so if boot throws, index.html's head script can show it again.
+    const fallback = document.getElementById("fallback");
+    this.#main.replaceChildren(...(fallback ? [fallback] : []), this.#noticeSlot, this.#pageRoot);
     this.#main.tabIndex = -1;
     this.#topbarHost.hidden = false;
     setHeadingResolver((lessonId, headingId) => this.#headingText(lessonId, headingId));
@@ -116,6 +118,11 @@ export class Shell {
     this.#renderFooter();
     this.#renderNotice();
     this.route();
+
+    // Booted: drop the fallback for good and tell the head script not to bring it back.
+    fallback?.remove();
+    document.documentElement.classList.add("js");
+    document.documentElement.setAttribute("data-booted", "");
   }
 
   /** Render the route in the address bar (or scroll, when it is the page already shown). */

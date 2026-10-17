@@ -82,6 +82,7 @@ export function BgzfDemoView(props: SimulatorViewProps) {
     <div class="simulator sim-bgzf">
       <Presets
         presets={exercise.presets}
+        isCurrent={(s) => JSON.stringify(s.gzi) === JSON.stringify(state.gzi)}
         onPick={(s) => {
           stop();
           act({ type: "preset", state: s });

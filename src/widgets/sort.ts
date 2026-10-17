@@ -875,16 +875,19 @@ export class SortElement extends HTMLElement {
       : exercise.matrix
         ? new MatrixSort(doc, exercise, getCard)
         : new BinsSort(doc, exercise, getCard);
-    const howTo = exercise.ordered
-      ? "Put the items in order with Move up and Move down (or Alt with the arrow keys), then select Check."
+    // Without a Check clause on quiz pages (one Submit quiz grades the page).
+    const action = exercise.ordered
+      ? "Put the items in order with Move up and Move down (or Alt with the arrow keys)"
       : exercise.matrix
-        ? "Choose where each row belongs, then select Check."
-        : undefined;
+        ? "Choose where each row belongs"
+        : exercise.bins.length > 4
+          ? "Choose a bin for each item with Place in (or drag it)"
+          : undefined;
     card = new ExerciseCard(
       this,
       exercise,
       composeHooks(view.hooks, () => followUps),
-      howTo ? { howTo: exercise.howTo ?? howTo } : {},
+      action ? { howTo: exercise.howTo ?? `${action}, then select Check.`, quizHowTo: `${action}.` } : {},
     );
     this.card = card;
     card.body.append(view.element);

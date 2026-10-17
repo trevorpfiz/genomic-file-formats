@@ -481,8 +481,14 @@ export interface StateChangeDetail {
 // ---------------------------------------------------------------------------------------------
 // Quizzes (docs/PLAN.md 6.1, D-09, D-30)
 
-/** Quiz variants are whole questions of the allowed types; no fix-it in quizzes. */
-export type QuizVariant = McqExercise | PredictExercise | SpotTheErrorExercise | SortExercise;
+/**
+ * Quiz variants are whole questions of the allowed types; no fix-it in quizzes. A variant that
+ * tests another heading than its slot's names it in `tests` ("<lesson-id>#<heading-id>"); the
+ * results panel's "Review:" link then uses it (quiz.ts), and the quiz checks validate it too.
+ */
+export type QuizVariant = (McqExercise | PredictExercise | SpotTheErrorExercise | SortExercise) & {
+  tests?: string;
+};
 
 /** A seeded random source. Same seed, same sequence; the quiz page owns the seeds. */
 export interface Rng {

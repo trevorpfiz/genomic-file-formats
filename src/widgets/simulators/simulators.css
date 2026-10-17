@@ -220,6 +220,12 @@ button.sim-chip {
   font-size: var(--fs-meta);
 }
 
+button.sim-chip[aria-pressed="true"] {
+  border-color: var(--accent);
+  background: var(--accent-subtle);
+  box-shadow: inset 0 0 0 1px var(--accent);
+}
+
 button.sim-chip code {
   margin-right: 0.15em;
 }
@@ -359,10 +365,11 @@ button.sim-chip code {
 }
 
 /* Phred decade grid */
+/* The grid fits its box at every width rather than scrolling: the figure is aria-hidden, so a
+   scroll region there could not be reached from the keyboard. */
 .sim-grid {
   display: grid;
   gap: 2px;
-  overflow-x: auto;
 }
 
 .sim-grid-row {
@@ -413,10 +420,29 @@ button.sim-chip code {
 
 @media (max-width: 599px) {
   .sim-grid-row {
-    grid-template-columns: 3.5rem repeat(10, minmax(1.45rem, 1fr));
+    grid-template-columns: auto repeat(10, minmax(0, 1fr));
   }
   .sim-grid-p {
     display: none;
+  }
+}
+
+@media (max-width: 479px) {
+  .sim-grid,
+  .sim-grid-row {
+    gap: 1px;
+  }
+  .sim-grid-head {
+    padding-right: 2px;
+    font-size: 0.6875rem;
+  }
+  .sim-grid-cell {
+    min-height: 1.6rem;
+    font-size: 0.75rem;
+  }
+  .sim-grid-cell[data-bin],
+  .sim-grid-cell[data-current] {
+    border-width: 1.5px;
   }
 }
 
@@ -591,32 +617,13 @@ button.sim-chip code {
   font-size: var(--fs-meta);
 }
 
-.sim-text-view table {
-  border-collapse: collapse;
-  font-size: var(--fs-meta);
-  font-variant-numeric: tabular-nums;
-}
-
-.sim-text-view caption,
+/* Table text views share the widget data-table style (widgets.css "Data tables"). */
 .sim-text-caption {
   margin: 0 0 var(--s-1);
   color: var(--text-muted);
   font-size: var(--fs-meta);
   font-weight: 600;
   text-align: left;
-}
-
-.sim-text-view th,
-.sim-text-view td {
-  padding: var(--s-1) var(--s-4) var(--s-1) 0;
-  border-bottom: 1px solid var(--border);
-  text-align: left;
-  vertical-align: top;
-}
-
-.sim-text-view thead th {
-  color: var(--text-muted);
-  font-weight: 600;
 }
 
 .sim-text-items {

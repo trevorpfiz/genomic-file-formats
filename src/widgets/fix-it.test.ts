@@ -90,7 +90,9 @@ describe("editor", () => {
   test("the starter shows its problems: two errors and the duplicate-name warning", async () => {
     await import("./fix-it.ts");
     const { host, q } = mount("gf-fix-it", FIX);
-    expect(q(".fixit-pill")?.textContent?.trim()).toBe("2 problems");
+    // One vocabulary in the pill and the heading: errors are problems, warnings are warnings.
+    expect(q(".fixit-pill")?.textContent?.trim()).toBe("2 problems, 1 warning");
+    expect(q(".fixit-problems .fixit-subhead")?.textContent).toBe("Problems (2) · Warnings (1)");
     expect(problems(host)).toEqual(["error", "error", "warning"]);
     expect(q(".fixit-problem")?.textContent).toContain("FA-S01 · faidx(5).");
     const gutter = [...host.querySelectorAll<HTMLElement>(".fixit-gutter-line")].map(
@@ -142,13 +144,33 @@ describe("live validation and Check", () => {
     const editor = area(host);
     editor.focus();
     type(editor, SOLUTION);
-    expect(q(".fixit-pill")?.textContent?.trim()).toBe("2 problems");
+    expect(q(".fixit-pill")?.textContent?.trim()).toBe("2 problems, 1 warning");
     vi.advanceTimersByTime(250);
     expect(q(".fixit-pill")?.textContent?.trim()).toBe("Valid FASTA");
     expect(live()).toBe("");
     vi.advanceTimersByTime(1000);
     expect(live()).toBe("No problems found.");
     expect(document.activeElement).toBe(editor);
+  });
+
+  test("a warning left is never announced as no problems, and unmet goals are named", async () => {
+    vi.useFakeTimers();
+    await import("./fix-it.ts");
+    const unique = { id: "unique", text: "Uses each sequence name once", check: "fastaUniqueNames" as const };
+    const { host, q, live } = mount("gf-fix-it", { ...FIX, goals: [...FIX.goals, unique] });
+    const editor = area(host);
+    const warningOnly = STARTER.replace("# reference for case 042\n", "").replace("GGGAGCT\n\n", "GGGAGCT\n");
+    type(editor, warningOnly);
+    vi.advanceTimersByTime(250);
+    expect(q(".fixit-pill")?.textContent?.trim()).toBe("Valid FASTA, 1 warning");
+    expect(q(".fixit-problems .fixit-subhead")?.textContent).toBe("Warnings (1)");
+    expect(problems(host)).toEqual(["warning"]);
+    vi.advanceTimersByTime(1000);
+    expect(live()).toBe("Valid FASTA, 1 warning. 1 goal not met.");
+    type(editor, SOLUTION);
+    vi.advanceTimersByTime(1250);
+    expect(q(".fixit-problems .fixit-subhead")?.textContent).toBe("Problems");
+    expect(live()).toBe("No problems found.");
   });
 
   test("Check with errors is incorrect and names the first; Show solution then shows a diff", async () => {

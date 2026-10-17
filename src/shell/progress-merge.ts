@@ -6,7 +6,6 @@
 // scores take the maximum; firstTry and revealed stick once true; passedAt, earnedAt, solvedAt
 // and completedAt take the earliest date; unknown keys, at any level, are preserved verbatim.
 import type { ExerciseState } from "../exercises/types.ts";
-import { mergeQuizProgress } from "../widgets/quiz-progress.ts";
 import {
   PROGRESS_SCHEMA,
   type BadgeProgress,
@@ -17,6 +16,7 @@ import {
   type LessonProgress,
   type Prefs,
   type ProgressState,
+  type QuizAttempt,
   type QuizProgress,
 } from "./progress-types.ts";
 
@@ -131,8 +131,36 @@ export function mergeBadge(older: BadgeProgress, newer: BadgeProgress): BadgePro
   return { ...older, ...newer, earnedAt: earliestOrNull(older.earnedAt, newer.earnedAt) };
 }
 
-/** Quizzes: best, of and attempts take the maximum, passedAt the earliest (src/widgets/quiz-progress.ts). */
-export const mergeQuiz = (a: QuizProgress, b: QuizProgress): QuizProgress => mergeQuizProgress(a, b);
+/** The later attempt; the same attempt submitted beats it unsubmitted. */
+function laterAttempt(x: QuizAttempt | undefined, y: QuizAttempt | undefined): QuizAttempt | undefined {
+  if (!x) return y;
+  if (!y) return x;
+  if (x.number !== y.number) return x.number > y.number ? x : y;
+  if (Boolean(x.submittedAt) !== Boolean(y.submittedAt)) return x.submittedAt ? x : y;
+  return y.startedAt >= x.startedAt ? y : x;
+}
+
+/**
+ * One quiz's records (docs/PLAN.md 6.1, D-09, D-36; ux 12.1): best, of and attempts take the
+ * maximum; passedAt the earliest date ("Passed" never disappears); the newer attempt in
+ * progress wins; unknown keys of both are kept. The shell's store and the cards' in-memory
+ * store both write quiz records through it.
+ */
+export function mergeQuizProgress(a: QuizProgress | undefined, b: QuizProgress): QuizProgress {
+  if (!a) return b;
+  const current = laterAttempt(a.current, b.current);
+  const merged: QuizProgress = {
+    ...a,
+    ...b,
+    best: Math.max(a.best, b.best),
+    of: Math.max(a.of, b.of),
+    passedAt: earliestOrNull(a.passedAt, b.passedAt),
+    attempts: Math.max(a.attempts, b.attempts),
+  };
+  if (current) merged.current = current;
+  else delete merged.current;
+  return merged;
+}
 
 /**
  * Merge two whole states. Preferences and the badge name follow the newer state (by
@@ -148,7 +176,7 @@ export function mergeProgressState(a: ProgressState, b: ProgressState): Progress
     schema: PROGRESS_SCHEMA,
     updatedAt: newer.updatedAt,
     lessons: mergeMaps(a.lessons, b.lessons, mergeLessonProgress),
-    quizzes: mergeMaps(a.quizzes, b.quizzes, mergeQuiz),
+    quizzes: mergeMaps(a.quizzes, b.quizzes, mergeQuizProgress),
     capstone: mergeCapstone(a.capstone, b.capstone),
     badge: mergeBadge(older.badge, newer.badge),
     prefs: { ...older.prefs, ...newer.prefs },

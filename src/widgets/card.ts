@@ -46,10 +46,9 @@ import type {
 } from "../exercises/types.ts";
 import { icon, type IconName } from "../shell/icons.ts";
 import { exerciseDomId } from "../shell/ids.ts";
-import { isComplete, mergeExerciseProgress } from "../shell/progress-merge.ts";
+import { isComplete, mergeExerciseProgress, mergeQuizProgress } from "../shell/progress-merge.ts";
 import type { ExerciseProgress, ProgressStore, QuizProgress } from "../shell/progress-types.ts";
 import { inlineNodes } from "./inline.ts";
-import { mergeQuizProgress, type QuizProgressStore } from "./quiz-progress.ts";
 
 // ---------------------------------------------------------------------------------------------
 // Vocabulary and policy
@@ -104,6 +103,30 @@ export const DEFAULT_HOW_TO: Readonly<Record<Kind, string>> = {
   mcq: "Choose an answer, then select Check.",
 };
 
+/**
+ * The how-to line on quiz pages. Quiz cards have no Check button (one "Submit quiz" grades the
+ * page, D-30), so these never mention Check. A widget's `quizHowTo` option overrides it.
+ */
+export const QUIZ_HOW_TO: Readonly<Record<Kind, string>> = {
+  "spot-the-error": "Select the line or field you think is wrong.",
+  "fix-it": "Edit the text until it is valid.",
+  sort: "Place each item in a bin: drag it, or select it and choose a bin.",
+  "field-explorer": "Hover over or focus each field to see what it means, then answer the question.",
+  simulator: "Use the controls to reach each goal.",
+  predict: "Enter your prediction.",
+  mcq: "Choose one answer.",
+};
+
+function howToFor(exercise: Exercise, mode: "lesson" | "quiz", options: CardOptions): string {
+  if (mode === "quiz") {
+    if (options.quizHowTo) return options.quizHowTo;
+    if (exercise.howTo) return exercise.howTo;
+    if (exercise.kind === "mcq" && exercise.multi) return "Choose every answer that applies.";
+    return QUIZ_HOW_TO[exercise.kind];
+  }
+  return options.howTo ?? exercise.howTo ?? DEFAULT_HOW_TO[exercise.kind];
+}
+
 const MODE_LABELS: Readonly<Record<string, string>> = {
   "try-it": "Try it",
   "quick-check": "Quick check",
@@ -114,7 +137,7 @@ const MODE_LABELS: Readonly<Record<string, string>> = {
 // Progress store
 
 /** The in-memory store cards (and the quiz page) use until the shell installs its persistent one. */
-export class MemoryProgressStore implements ProgressStore, QuizProgressStore {
+export class MemoryProgressStore implements ProgressStore {
   readonly records = new Map<string, ExerciseProgress>();
   readonly quizzes = new Map<string, QuizProgress>();
   getExercise(id: string): ExerciseProgress | undefined {
@@ -220,8 +243,10 @@ export interface CardOptions {
   mode?: "lesson" | "quiz";
   /** Overrides the overline ("Question 3 of 6" on quiz pages). */
   overline?: string;
-  /** Overrides the how-to line. */
+  /** Overrides the how-to line (lesson mode). */
   howTo?: string;
+  /** Overrides the how-to line on quiz pages, which have no Check button (QUIZ_HOW_TO). */
+  quizHowTo?: string;
   /** The primary button's label: "Check" or "Lock in my prediction". */
   checkLabel?: string;
   /** False for cards that complete on their own (simulators, field-explorers). */
@@ -329,7 +354,7 @@ export class ExerciseCard<E extends Exercise = Exercise> {
 
     const howTo = el("p", "card-howto");
     howTo.id = `${this.domId}-howto`;
-    howTo.textContent = options.howTo ?? exercise.howTo ?? DEFAULT_HOW_TO[exercise.kind];
+    howTo.textContent = howToFor(exercise, this.mode, options);
     const prompt = el("p", "card-prompt");
     if (exercise.prompt) prompt.append(inlineNodes(exercise.prompt, doc));
     this.body = el("div", "card-body");
@@ -461,6 +486,15 @@ export class ExerciseCard<E extends Exercise = Exercise> {
     } finally {
       this.#restoring = false;
     }
+  }
+
+  /**
+   * Save the current record now: for an answer that changed without a state change (a
+   * simulator's predict gate locked while the card stays "attempted").
+   */
+  save(): void {
+    if (this.mode !== "lesson" || this.embedded || this.#restoring) return;
+    this.#persist();
   }
 
   /** The learner changed the answer: idle or incorrect becomes attempted. */

@@ -5,7 +5,9 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="color-scheme" content="light dark" />
     <!-- Before first paint: mark that scripts run (the static fallback is then hidden while the
-         app boots) and apply a saved Light or Dark theme, so there is no flash (ux 6.5). -->
+         app boots) and apply a saved Light or Dark theme, so there is no flash (ux 6.5). If the
+         app has not booted by DOMContentLoaded (module scripts run before it), or an error
+         fires before it has, show the fallback again (D-28); Shell.start() sets data-booted. -->
     <script>
       (function () {
         var root = document.documentElement;
@@ -14,6 +16,12 @@
           var theme = localStorage.getItem("genomic-file-formats:theme");
           if (theme === "light" || theme === "dark") root.setAttribute("data-theme", theme);
         } catch (e) {}
+        function unbooted() {
+          if (!root.hasAttribute("data-booted"))
+            root.className = root.className.replace(/(^|\s)js(?=\s|$)/g, "");
+        }
+        window.addEventListener("error", unbooted);
+        document.addEventListener("DOMContentLoaded", unbooted);
       })();
     </script>
     <script nomodule>

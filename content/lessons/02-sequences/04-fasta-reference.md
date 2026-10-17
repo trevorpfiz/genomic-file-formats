@@ -31,11 +31,11 @@ A FASTA file is a labelled string. A header line starts with `>`, and the lines 
 
 ::snippet{id="fasta-reference/toy-fa"}
 
-Within a record, every sequence line has the same width, and only the last line may be shorter. That constant width lets a program compute where any base sits instead of reading up to it: the next lesson's subject. Lowercase bases, as in `chr1_tel`, are soft-masked. They are the same bases, flagged as repeats, and never a sign of low quality. <!-- src: seq §2, §3.1 (UCSC soft-masked chr1:10001-10036), FA-S02, FA-C03, pitfall 5 -->
+In an indexable FASTA, every sequence line of a record has the same width, and only the last line may be shorter. That constant width lets a program compute where any base sits instead of reading up to it: the next lesson's subject. In a reference FASTA, lowercase bases, as in `chr1_tel`, are soft-masked: the same bases, flagged as repeats, not a sign of low quality. <!-- src: seq §2, §3.1 (UCSC soft-masked chr1:10001-10036), FA-S02, FA-C03, pitfall 5 -->
 
 FASTA has no formal specification. The working rules come from htslib's `faidx(5)` manual page, which defines what an indexable FASTA file is. <!-- src: seq intro; faidx(5) -->
 
-The lab's reference is the Broad GRCh38 analysis set, `Homo_sapiens_assembly38.fasta`, with 3,366 sequences. Besides the 25 primary chromosomes it holds alternate (ALT) contigs, decoys, the Epstein-Barr virus genome and HLA alleles. Decoys and the virus catch reads that truly come from them. Without them, those reads would mis-map onto the chromosomes and look like variants. <!-- src: seq §10 [verified: GRCh38] -->
+The lab's reference is the Broad GRCh38 analysis set, `Homo_sapiens_assembly38.fasta`, with 3,366 sequences. Besides the 25 primary sequences (chr1-22, X, Y and the mitochondrial chrM), it holds unlocalized and unplaced contigs, alternate (ALT) contigs, decoys, the Epstein-Barr virus genome and HLA alleles. Decoys and the virus catch reads that truly come from them. Without them, those reads would mis-map onto the chromosomes and look like variants. <!-- src: seq §10 [verified: GRCh38] -->
 
 :::read-more{title="What else is in the analysis set"}
 
@@ -57,7 +57,7 @@ The lab aligns all three exomes to `Homo_sapiens_assembly38.fasta`. Its chr2 is 
 
 ::spot-the-error{exercise="fasta-reference/why-wont-this-index"}
 
-Line width is not the only structural rule. A FASTA file starts with a `>` header line, and a record's sequence contains no blank lines. Break either rule and samtools refuses to index the file. A repeated name earns only a warning: samtools keeps the first record and ignores the second, so a lookup can silently use the wrong one. Once the names reach a SAM header, repeats are forbidden outright. <!-- src: seq FA-S01, FA-S03, FA-M01 [verified: test]; SAMv1 §1.3 -->
+Line width is not the only structural rule. A FASTA file's first non-blank line is a `>` header, and a record's sequence contains no blank lines. Break either rule and samtools refuses to index the file. A blank line before the first header, or a repeated name, earns only a warning. Of two records with one name, samtools keeps the first and ignores the second, so a lookup can silently use the wrong one. Once the names reach a SAM header, repeats are forbidden outright. <!-- src: seq FA-S01 (verification log 12), FA-S03, FA-M01 [verified: test]; SAMv1 §1.3 -->
 
 :::read-more{title="Protein FASTA, comments and unusual names"}
 
@@ -95,4 +95,4 @@ Line width is not the only structural rule. A FASTA file starts with a `>` heade
 
 :::
 
-Next: finding one base in 3 GB without reading the rest.
+Next: [finding one base in 3 GB without reading the rest](#/lesson/random-access).

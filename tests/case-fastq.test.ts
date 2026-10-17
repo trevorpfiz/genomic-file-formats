@@ -71,6 +71,12 @@ describe.each(CASE_FASTQ_FILES)("$path", (file) => {
   });
 });
 
+test("ids are unique, and case.md's split-read tile:x:y (1203:15410:22045) stays free for M2", () => {
+  const ids = CASE_FRAGMENTS.map((f) => f.id);
+  expect(new Set(ids).size).toBe(ids.length);
+  for (const id of ids) expect(id.endsWith(":1203:15410:22045"), id).toBe(false);
+});
+
 test("mates are in the same order with the same ids and index in R1 and R2", () => {
   for (const sample of ["P042-proband", "P042-mother", "P042-father"] as const) {
     const r1 = fileFor(sample, 1).records;

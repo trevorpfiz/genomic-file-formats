@@ -30,24 +30,24 @@ specs:
 summary: "How a sequencer turns DNA into reads, and how FASTQ stores each base with its quality."
 ---
 
-The reference FASTA answers "Compared with what?". FASTQ answers the next question: what did the sequencer read in each person, and how sure was it?
+FASTA answers "Compared with what?" FASTQ answers the next question: what did the sequencer read in each person, and how sure was it?
 
 ## How a sequencer turns DNA into reads
 
-**Library and pairs.** The lab breaks each sample's DNA into fragments and attaches adapters. A short-read instrument reads both ends of each fragment. Read 1 (R1) and read 2 (R2) come from opposite ends and point toward each other; the fragment's whole span is the insert size. <!-- src: found §3.3 -->
+**Library and pairs.** The lab breaks each sample's DNA into fragments and attaches adapters. In paired-end sequencing, a short-read instrument reads both ends of each fragment. Read 1 (R1) and read 2 (R2) come from opposite ends and point toward each other; the fragment's whole span is the insert size. <!-- src: found §3.3 -->
 
 **Short and long reads.** Short reads are cheap and accurate per base but cannot span long repeats. Long reads can, and Section 7 uses them. <!-- src: found §3.3; qualitative only until V-10 -->
 
 **Depth.** Mean depth is C = N·L/G: reads times read length, divided by the size of what was sequenced. Breadth is the share of that region covered at some minimum depth. <!-- src: found §3.3 -->
 
-**Exome or genome.** An exome captures the coding exons, about 30 to 45 Mb or 1-2% of the genome, and is usually sequenced deeper than a genome. <!-- src: found §3.3 -->
+**Exome or genome.** An exome captures the coding exons, about 30 to 45 Mb or 1-2% of the genome, and is usually sequenced deeper. <!-- src: found §3.3 -->
 
-**Multiplexing.** Several samples share a run. Index reads tell them apart, and read groups keep the child's reads separate from the parents' all the way to the variant calls. <!-- src: found §3.3 -->
+**Multiplexing.** Several samples share a run. Index reads tell them apart, and read groups keep each sample's reads separate up to the variant calls. <!-- src: found §3.3 -->
 
 ::predict{exercise="fastq-reads/genome-or-exome"}
 
 :::case-file{step="1"}
-The lab draws blood from Noa and both parents. Each exome is sequenced as 2×150 read pairs and arrives as two files, such as `P042-proband_S1_L001_R1_001.fastq.gz` and its `_R2_` mate. Mean target depths are 116× for Noa, 121× for her mother and 63× for her father. His library yielded about half the read pairs of the others (about 32 M against 60 M, illustrative). Lab QC flagged it, and it explains his lower depth. <!-- src: case §3.2, §3.5; PLAN §9.2, §9.5 -->
+The lab draws blood from Noa and both parents. Each exome arrives as two files of 2×150 read pairs, such as `P042-proband_S1_L001_R1_001.fastq.gz` and its `_R2_` mate. Mean target depths are 116× for Noa, 121× for her mother and 63× for her father. Off-target reads and duplicates do not count, so these sit far below the raw 450× that about 60 M pairs give. The father's library yielded about half as many pairs (about 32 M, illustrative), which lab QC flagged; that explains his lower depth. <!-- src: case §3.2, §3.5; PLAN §9.2, §9.5 -->
 :::
 
 ## Try it: quality as probability
@@ -84,15 +84,13 @@ PacBio HiFi reads can reach Q93, the top of the Phred+33 range. <!-- src: seq EX
 
 ## Anatomy of a FASTQ record
 
-A record has four lines: a title starting with `@`, the bases, a separator starting with `+`, and the qualities, exactly one character per base. The title's first word is the read ID; a comment may follow after a space. After alignment, the read ID becomes the SAM QNAME and the qualities become QUAL. <!-- src: seq §3.3; SAMv1 §1.4 -->
+A record has four parts, usually one line each: a title starting with `@`, the bases, a separator starting with `+`, and the qualities, exactly one character per base. The title's first word is the read ID; a comment may follow after a space. After alignment, the read ID becomes the SAM QNAME and the qualities become QUAL. <!-- src: seq §3.3; SAMv1 §1.4 -->
 
 :::read-more{title="Long-read titles"}
 Long-read titles carry other metadata. Oxford Nanopore titles hold key=value pairs after the read ID, as in `@03dd2268-... runid=... read=252 ch=179 start_time=2019-12-08T11:54:28Z`. Tools still take the first word as the read ID. <!-- src: seq §3.3 (Galaxy training FAQ, verified) -->
 :::
 
 ::field-explorer{exercise="fastq-reads/read-pair-titles"}
-
-Noa's reads have the same layout: 150 bases and binned qualities.
 
 ::snippet{id="fastq-reads/noa-first-read"}
 
@@ -102,7 +100,7 @@ Noa's reads have the same layout: 150 bases and binned qualities.
 
 - **Q is a probability on a log scale.** Q30 means a 1-in-1,000 chance that the base call is wrong.
 - **Sum probabilities, not Q values.** A read's expected errors are the sum of P over its bases.
-- **One quality character per base.** The quality line is exactly as long as the sequence.
+- **One quality character per base.** The qualities are exactly as long as the bases.
 - **Depth is reads times length over size.** C = N·L/G tells an exome from a genome.
 
 :::
@@ -110,17 +108,17 @@ Noa's reads have the same layout: 150 bases and binned qualities.
 :::at-a-glance{format="fastq"}
 
 - **Extensions:** `.fastq`, `.fq`, usually gzipped (`_R1_001.fastq.gz`)
-- **Text or binary:** text
-- **Delimiter:** none; four lines per record
-- **Coordinates:** none; reads have no position yet
-- **Header lines:** none; each record starts with `@`
-- **Index file:** `.fai` with six columns (`samtools fqidx`)
-- **Spec:** no formal spec; Cock et al. 2010
-- **Answers:** What did the sequencer read, and how sure was it?
-- **Keeps:** bases, per-base qualities and read IDs
-- **Drops:** where each read belongs
-- **Next file:** SAM or BAM, after alignment
+- **Text or binary:** Text
+- **Delimiter:** None; usually four lines per record
+- **Coordinates:** None; reads have no position yet
+- **Header lines:** None; each record starts with `@`
+- **Index file:** `.fai` (`samtools fqidx`): the five FASTA columns plus QUALOFFSET
+- **Spec:** No formal spec; Cock et al. 2010
+- **Answers:** "What did the sequencer read, and how sure was it?"
+- **Keeps:** Bases, per-base qualities and read IDs
+- **Drops:** Where each read belongs
+- **Next file:** SAM or BAM
 
 :::
 
-Next: when FASTQ files misbehave.
+Next: [when FASTQ files misbehave](#/lesson/fastq-in-the-wild).

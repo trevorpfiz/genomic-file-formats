@@ -2,7 +2,8 @@
 //   <div class="code-block" data-lang="sh"><p class="code-block-title">…</p><pre><code>…</code></pre></div>
 // and the shell adds a 32px icon button named "Copy code". On success the icon becomes a check
 // with a visible "Copied" label for 2 s and a polite status region says "Copied to clipboard."
-// Shell blocks copy only their command lines, without the "$ " prompt.
+// Shell blocks copy only their command lines, without the "$ " prompt. The <pre> becomes a
+// focusable region named "<title or Code>, scrollable".
 import { icon } from "../shell/icons.ts";
 import { COPY_FAILED, copyText } from "./copy.ts";
 
@@ -22,8 +23,16 @@ export function enhanceCodeBlocks(root: ParentNode): void {
   for (const block of root.querySelectorAll<HTMLElement>(".code-block")) {
     if (block.querySelector(":scope > .code-copy")) continue;
     const code = block.querySelector("pre code");
-    if (!code) continue;
+    const pre = code?.parentElement;
+    if (!code || !pre) continue;
     const text = code.textContent ?? "";
+    // A long line scrolls inside the block at phone widths (and at 400% zoom), so the block is
+    // a named, focusable region that keyboard users can scroll (WCAG 2.1.1; axe
+    // scrollable-region-focusable), as snippet bodies are.
+    const title = block.querySelector(":scope > .code-block-title")?.textContent?.trim();
+    pre.tabIndex = 0;
+    pre.setAttribute("role", "region");
+    pre.setAttribute("aria-label", `${title || "Code"}, scrollable`);
     block.toggleAttribute("data-single-line", !text.replace(/\n$/, "").includes("\n"));
     const status = document.createElement("span");
     status.className = "visually-hidden";

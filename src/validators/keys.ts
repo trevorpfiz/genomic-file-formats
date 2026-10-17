@@ -538,17 +538,23 @@ export function slotProblems(quiz: Quiz, slot: QuizSlot, ctx: QuizContext): stri
       p.push(...variantProblems(quiz, slot, v, where, ctx));
     }
   }
-  // The heading it tests: built, earlier in the course, outside Read-more.
-  const [lessonId = "", heading = ""] = slot.tests.split("#");
-  const page = ctx.pages.get(lessonId);
-  if (!page) p.push(`${at}: tests ${slot.tests}, but ${lessonId} is not built`);
-  else {
-    if ((ctx.order.get(lessonId) ?? Infinity) > quizOrder) p.push(`${at}: tests a lesson after the quiz`);
-    if (!page.headings.includes(heading)) p.push(`${at}: ${lessonId} has no heading "${heading}"`);
+  // The heading it tests (the slot's, and any variant's own): built, earlier in the course,
+  // outside Read-more.
+  const targets: [string, string][] = [[at, slot.tests]];
+  for (const v of slot.variants) if (v.tests !== undefined) targets.push([v.id, v.tests]);
+  for (const [where, tests] of targets) {
+    const [lessonId = "", heading = ""] = tests.split("#");
+    const page = ctx.pages.get(lessonId);
+    if (!page) p.push(`${where}: tests ${tests}, but ${lessonId} is not built`);
     else {
-      const pos = page.html.indexOf(`id="${heading}"`);
-      if (readMoreRanges(page.html).some(([a, b]) => pos > a && pos < b))
-        p.push(`${at}: ${slot.tests} is inside Read-more`);
+      if ((ctx.order.get(lessonId) ?? Infinity) > quizOrder)
+        p.push(`${where}: tests a lesson after the quiz`);
+      if (!page.headings.includes(heading)) p.push(`${where}: ${lessonId} has no heading "${heading}"`);
+      else {
+        const pos = page.html.indexOf(`id="${heading}"`);
+        if (readMoreRanges(page.html).some(([a, b]) => pos > a && pos < b))
+          p.push(`${where}: ${tests} is inside Read-more`);
+      }
     }
   }
   if (!slot.concepts.length) p.push(`${at}: no concepts`);

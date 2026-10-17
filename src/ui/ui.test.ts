@@ -40,6 +40,12 @@ describe("code blocks", () => {
     expect(block.querySelector("button")!.getAttribute("aria-label")).toBe("Copy code");
     expect(block.hasAttribute("data-single-line")).toBe(true);
     expect(block.querySelector("[role=status]")).not.toBeNull();
+    const pre = block.querySelector("pre")!;
+    expect([pre.tabIndex, pre.getAttribute("role"), pre.getAttribute("aria-label")]).toEqual([
+      0,
+      "region",
+      "Code, scrollable",
+    ]);
   });
 });
 

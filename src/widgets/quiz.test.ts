@@ -17,7 +17,7 @@ import type {
 } from "../exercises/types.ts";
 import { MemoryProgressStore, setProgressStore } from "./card.ts";
 import { chooseVariant, createRng, shuffleVariant, variantFromRef } from "./quiz.ts";
-import { mergeQuizProgress } from "./quiz-progress.ts";
+import { mergeQuizProgress } from "../shell/progress-merge.ts";
 import { choose, type } from "./test-utils.ts";
 
 const base = { prompt: "", source: "test", formats: ["fasta" as const], concepts: ["fasta.line-width"] };
@@ -221,6 +221,13 @@ describe("the quiz page", () => {
     );
     expect(qs.map((q) => q.dataset.mode)).toEqual(Array(6).fill("quiz"));
     expect(host.querySelectorAll(".card-actions")).toHaveLength(0);
+    // Quiz cards have no Check button (D-30), so no how-to line may point at one.
+    const howTos = qs.map((q) => q.querySelector(".card-howto")?.textContent ?? "");
+    expect(
+      howTos.every((t) => t !== "" && !/\bCheck\b/.test(t)),
+      howTos.join(" | "),
+    ).toBe(true);
+    expect(howTos[1]).toBe("Choose one answer.");
     expect(qs[0]!.querySelector("h2.exercise-title")?.textContent).toBe("Which line stops indexing?");
     expect(host.querySelector(".quiz-status")?.textContent).toBe("Answered 0 of 6");
     answer(qs[1]!);
@@ -253,6 +260,25 @@ describe("the quiz page", () => {
       "#/lesson/fastq-in-the-wild/try-it-which-file-is-this",
       "#/lesson/fastq-reads/recap",
     ]);
+  });
+
+  test("a variant's own `tests` overrides its slot's for the Review link", async () => {
+    const slots = QUIZ.slots.map((s) =>
+      s.id === "6"
+        ? {
+            ...s,
+            variants: s.variants.map((v) => ({ ...v, tests: "random-access#recap" })),
+          }
+        : s,
+    );
+    const host = await show({ ...QUIZ, slots });
+    const qs = questions(host);
+    qs.forEach((q, i) => answer(q, i !== 5));
+    submit(host);
+    const links = [...host.querySelectorAll<HTMLAnchorElement>(".quiz-review")].map((a) =>
+      a.getAttribute("href"),
+    );
+    expect(links).toEqual(["#/lesson/random-access/recap"]);
   });
 
   test("a pass: every card graded once, focus on the results heading, Passed, the record kept", async () => {

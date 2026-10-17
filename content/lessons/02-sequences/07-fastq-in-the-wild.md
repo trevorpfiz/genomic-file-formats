@@ -56,7 +56,7 @@ Real FASTQ files are messier than the four-line example. A tool must read wrappe
 
 **Pairs travel together.** Aligners pair reads by position: the first record of R1 with the first record of R2, and so on. Filtering one file alone shifts every later pair. bwa checks the names and stops with `paired reads have different names`, so filter the two files together, in a tool's paired mode. <!-- src: seq §2, EX-12; bwa(1); bwamem_pair.c -->
 
-**Truncation.** A file that ends inside a record is truncated (FQ-S06). Its last record stops early, and a gzipped copy also fails `gzip -t`. samtools reports `File truncated`. Its verdict is Invalid, whatever a lenient tool reads from it. <!-- src: seq §5 FQ-S06; PLAN §8.3 FASTQ row, D-11 -->
+**Truncation.** A file that ends inside a record is truncated (FQ-S06). Its last record stops early, and samtools reports `File truncated`. If the compressed bytes were cut, as in a broken transfer, `gzip -t` fails too. A FASTQ cut before compression passes `gzip -t`, which is why record counts are compared as well. Its verdict is Invalid, whatever a lenient tool reads from it. <!-- src: seq §5 FQ-S06; PLAN §8.3 FASTQ row, D-11 -->
 
 :::case-file{step="1"}
 The sequencing core checks every transfer on arrival. It runs `gzip -t` on each file and compares the record counts of each R1 and R2 file, because a truncated FASTQ still looks fine at the top. <!-- src: PLAN §5 L07 case beat -->
@@ -70,11 +70,11 @@ The sequencing core checks every transfer on arrival. It runs `gzip -t` on each 
 
 Record (b) shows that a tool accepting a file does not make it valid. Biopython enforces the rule that a repeated title must match; samtools fqidx does not. When tools disagree, the rules decide the verdict, and what each tool does is a note beside it. Keep three questions apart: does the file follow its format's rules, does a given tool accept it, and can this analysis use it? <!-- src: seq EX-09, FQ-S03; D-11 -->
 
+**First-byte cues.** `>` starts FASTA and `@` starts FASTQ, but a SAM header line also starts with `@`, followed by a two-letter code and a TAB. TAB-separated numbers point to an index or an interval file, and the numbers tell them apart. Read as BED, a `.fai` row has its start after its end, and its last column is one more than the one before. The alphabet separates the two FASTA kinds: `E`, `F`, `L`, `P` and `Q` are not nucleotide codes. Compressed bytes hide all of this until you decompress them. <!-- src: seq §6 (telling a .fai from a BED file) -->
+
 ## Try it: which file is this?
 
 ::sort{exercise="fastq-in-the-wild/which-file-is-this"}
-
-**First-byte cues.** `>` starts FASTA and `@` starts FASTQ, but a SAM header line also starts with `@`, followed by a two-letter code and a TAB. TAB-separated numbers point to an index or an interval file, and the column count tells them apart. The alphabet separates the two FASTA kinds: `E`, `F`, `L`, `P` and `Q` are not nucleotide codes. Compressed bytes hide all of this until you decompress them. <!-- src: seq §6 -->
 
 ## Recap
 
@@ -87,4 +87,4 @@ Record (b) shows that a tool accepting a file does not make it valid. Biopython 
 
 :::
 
-Next: the section quiz on FASTA, FASTQ and their indexes.
+Next: [the section quiz on FASTA, FASTQ and their indexes](#/quiz/sequences).

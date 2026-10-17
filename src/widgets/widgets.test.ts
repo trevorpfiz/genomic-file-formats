@@ -9,6 +9,7 @@ import type { PredictExercise, SimulatorExercise } from "../exercises/types.ts";
 import { MemoryProgressStore, setProgressStore } from "./card.ts";
 import { WIDGET_TAGS } from "./index.ts";
 import { matches } from "./predict.ts";
+import { TOY_ROW, FIND_THE_BYTE } from "./simulators/test-fixtures.ts";
 import { choose, mount, type } from "./test-utils.ts";
 
 const PREDICT: PredictExercise = {
@@ -54,31 +55,45 @@ const MULTI: PredictExercise = {
   ],
 };
 
-const RULER: SimulatorExercise = {
-  id: "test-lesson/ruler-step",
-  kind: "simulator",
-  simulator: "coordinate-ruler",
-  title: "Step the ruler to the BED interval",
-  prompt: "Move the highlighted base until the ruler shows the BED interval 166,014,901 to 166,014,902.",
-  source: "test",
-  tags: ["concept"],
-  formats: ["bed"],
-  concepts: ["coords.zero-based"],
-  init: { position: 166_014_900 },
-  goals: [
-    {
-      id: "reach-interval",
-      text: "Show the base whose BED interval is 166,014,901 to 166,014,902.",
-      when: "showsBedInterval",
-      args: { start: 166_014_901, end: 166_014_902 },
-      explanation: "The 1-based position 166,014,902 is the BED interval [166,014,901, 166,014,902).",
-      witness: [
-        { type: "step", by: 1 },
-        { type: "step", by: 1 },
-      ],
-    },
-  ],
-  textView: "table",
+/** L05.1 with only its first goal: type position 45 to reach it. */
+const BYTE_45: SimulatorExercise = { ...FIND_THE_BYTE, goals: [FIND_THE_BYTE.goals[0]!] };
+
+/** The same simulator with a predict gate (docs/PLAN.md 7.5 `predictGate`). */
+const GATED: SimulatorExercise = {
+  ...BYTE_45,
+  predictGate: {
+    id: "predict-byte",
+    kind: "predict",
+    prompt: "",
+    items: [
+      {
+        label: "Which byte holds base 45 of `chrM_demo`?",
+        input: { type: "number", answer: 84, tolerance: 0 },
+        computeWith: { helper: "faiByte", args: { position: 45, row: TOY_ROW } },
+      },
+    ],
+    reveal: "38 + 2 × 21 + 4 = byte 84.",
+  },
+};
+
+/** A simulator id without a view, for host behaviour that tests drive through a stand-in view. */
+const STUB: SimulatorExercise = {
+  ...BYTE_45,
+  id: "test-lesson/stub",
+  simulator: "cigar-drawer",
+  goals: [{ ...FIND_THE_BYTE.goals[0]!, id: "reach" }],
+};
+
+/** The Byte row of the fai-calculator's text view. */
+const byteRow = (host: HTMLElement) =>
+  [...host.querySelectorAll(".sim-text-view tbody tr")]
+    .find((tr) => tr.querySelector("th")?.textContent === "Byte")
+    ?.querySelector("td")?.textContent;
+const positionInput = (host: HTMLElement) => {
+  const label = [...host.querySelectorAll("label")].find(
+    (l) => l.textContent?.trim() === "Position (1-based)",
+  );
+  return host.ownerDocument.getElementById(label!.htmlFor) as HTMLInputElement;
 };
 
 let store: MemoryProgressStore;
@@ -239,45 +254,42 @@ describe("gf-predict", () => {
 
   test("an exercise of another kind renders a visible error", async () => {
     await import("./predict.ts");
-    mount("gf-predict", RULER);
+    mount("gf-predict", BYTE_45);
     expect(document.querySelector(".widget-error")?.textContent).toContain("is a simulator, not a predict");
   });
 });
 
 describe("gf-simulator (Preact island)", () => {
-  test("stepping the ruler reaches the goal, completes the card and fires gf:solved once", async () => {
+  test("reaching the goal completes the card and fires gf:solved once", async () => {
     await import("./simulator.tsx");
-    const { host, solved } = mount("gf-simulator", RULER, { "data-mode": "try-it" });
-    const cell = () => host.querySelector("tbody tr td")?.textContent;
-    expect(cell()).toBe("166,014,900");
+    const { host, solved } = mount("gf-simulator", BYTE_45, { "data-mode": "try-it" });
+    expect(byteRow(host)).toBe("38 + 0 × 21 + 0 = 38");
     expect(host.querySelector(".card-actions-primary")?.textContent).toBe("Reset");
-    const next = [...host.querySelectorAll("button")].find((b) => b.textContent === "Next base")!;
-    next.click();
-    await vi.waitFor(() => expect(cell()).toBe("166,014,901"));
+    type(positionInput(host), "44");
+    await vi.waitFor(() => expect(byteRow(host)).toBe("38 + 2 × 21 + 3 = 83"));
     expect(solved).not.toHaveBeenCalled();
-    next.click();
-    await vi.waitFor(() => expect(host.querySelector(".readout")?.textContent).toMatch(/^Goal reached/));
-    next.click();
-    await vi.waitFor(() => expect(cell()).toBe("166,014,903"));
+    type(positionInput(host), "45");
+    await vi.waitFor(() => expect(host.dataset.state).toBe("correct"));
+    type(positionInput(host), "46");
+    type(positionInput(host), "45");
+    await vi.waitFor(() => expect(byteRow(host)).toBe("38 + 2 × 21 + 4 = 84"));
     expect(solved).toHaveBeenCalledTimes(1);
-    expect(solved.mock.calls[0]?.[0]).toMatchObject({ id: RULER.id, state: "correct" });
-    expect(host.dataset.state).toBe("correct");
+    expect(solved.mock.calls[0]?.[0]).toMatchObject({ id: BYTE_45.id, state: "correct" });
   });
 
   test("Reset remounts the island at its initial state", async () => {
     await import("./simulator.tsx");
-    const { host, buttonNamed } = mount("gf-simulator", RULER);
-    const cell = () => host.querySelector("tbody tr td")?.textContent;
-    [...host.querySelectorAll("button")].find((b) => b.textContent === "Next base")!.click();
-    await vi.waitFor(() => expect(cell()).toBe("166,014,901"));
+    const { host, buttonNamed } = mount("gf-simulator", FIND_THE_BYTE);
+    type(positionInput(host), "44");
+    await vi.waitFor(() => expect(byteRow(host)).toBe("38 + 2 × 21 + 3 = 83"));
     buttonNamed("Reset")!.click();
-    expect(cell()).toBe("166,014,900");
+    expect(byteRow(host)).toBe("38 + 0 × 21 + 0 = 38");
     expect(host.querySelectorAll(".island")).toHaveLength(1);
   });
 
   test("disconnecting unmounts the island and reconnecting mounts it again", async () => {
     await import("./simulator.tsx");
-    const { host } = mount("gf-simulator", RULER);
+    const { host } = mount("gf-simulator", FIND_THE_BYTE);
     expect(host.querySelector(".island")).not.toBeNull();
     host.remove();
     expect(host.querySelector(".island")).toBeNull();
@@ -289,11 +301,11 @@ describe("gf-simulator (Preact island)", () => {
     const { VIEWS } = await import("./simulator.tsx");
     const { useEffect } = await import("preact/hooks");
     VIEWS["cigar-drawer"] = ({ onGoal }) => {
-      useEffect(() => onGoal("reach-interval", "shown"), [onGoal]);
+      useEffect(() => onGoal("reach", "shown"), [onGoal]);
       return null;
     };
     try {
-      const { host, solved } = mount("gf-simulator", { ...RULER, simulator: "cigar-drawer" });
+      const { host, solved } = mount("gf-simulator", STUB);
       await vi.waitFor(() => expect(host.dataset.state).toBe("revealed"));
       expect(solved.mock.calls[0]?.[0]).toMatchObject({ state: "revealed", revealed: true });
     } finally {
@@ -303,8 +315,69 @@ describe("gf-simulator (Preact island)", () => {
 
   test("a simulator without a view shows its notice inside the card", async () => {
     await import("./simulator.tsx");
-    const { host } = mount("gf-simulator", { ...RULER, simulator: "cigar-drawer" });
+    const { host } = mount("gf-simulator", STUB);
     expect(host.querySelector(".widget-stub")?.textContent).toContain("cigar-drawer simulator");
+  });
+
+  test("only the M1 simulators have views; the M0 ruler placeholder does not ship", async () => {
+    const { VIEWS } = await import("./simulator.tsx");
+    expect(Object.keys(VIEWS).sort()).toEqual(["bgzf-demo", "fai-calculator", "phred-converter"]);
+  });
+});
+
+describe("gf-simulator with a predict gate", () => {
+  const gate = (host: HTMLElement) => host.querySelector<HTMLElement>(".sim-gate")!;
+  const lockIn = (host: HTMLElement, value: string) => {
+    type(gate(host).querySelector<HTMLInputElement>("input")!, value);
+    gate(host).querySelector<HTMLButtonElement>(".card-actions .button-primary")!.click();
+  };
+
+  test("the island opens only once the prediction is locked in; a match ends Correct", async () => {
+    await import("./simulator.tsx");
+    const { host, solved, live } = mount("gf-simulator", GATED, { "data-mode": "try-it" });
+    expect(gate(host).querySelector(".card-overline")?.textContent).toBe("Predict first · Predict");
+    expect(gate(host).querySelector("label")?.textContent).toBe("Which byte holds base 45 of chrM_demo?");
+    expect(host.querySelector(".island")).toBeNull();
+    expect(host.querySelector<HTMLElement>(".sim-gate-note")!.hidden).toBe(false);
+    expect(byteRow(host)).toBeUndefined();
+    type(gate(host).querySelector<HTMLInputElement>("input")!, "84");
+    expect(host.dataset.state).toBe("attempted");
+    gate(host).querySelector<HTMLButtonElement>(".card-actions .button-primary")!.click();
+    expect(gate(host).dataset.state).toBe("correct");
+    expect(host.querySelector(".island")).not.toBeNull();
+    expect(host.querySelector<HTMLElement>(".sim-gate-note")!.hidden).toBe(true);
+    expect(live()).toBe("The simulator is open below the prediction.");
+    expect(store.getExercise(GATED.id)?.answer).toMatchObject({ gate: { state: "correct", answer: ["84"] } });
+    type(positionInput(host), "45");
+    await vi.waitFor(() => expect(host.dataset.state).toBe("correct"));
+    expect(solved.mock.calls[0]?.[0]).toMatchObject({ state: "correct", firstTry: true });
+  });
+
+  test("a prediction that does not match still opens the simulator, and ends Answer shown", async () => {
+    await import("./simulator.tsx");
+    const { host, solved, verdict } = mount("gf-simulator", GATED);
+    lockIn(host, "85");
+    expect(gate(host).dataset.state).toBe("revealed");
+    type(positionInput(host), "45");
+    await vi.waitFor(() => expect(host.dataset.state).toBe("revealed"));
+    expect(verdict()).toBe("Answer shown. Every goal reached; your prediction did not match.");
+    expect(solved.mock.calls[0]?.[0]).toMatchObject({ state: "revealed" });
+  });
+
+  test("a reload keeps the locked prediction and the open simulator; Reset closes it again", async () => {
+    await import("./simulator.tsx");
+    const first = mount("gf-simulator", GATED);
+    lockIn(first.host, "84");
+    first.host.remove();
+    const { host, action } = mount("gf-simulator", GATED);
+    expect(gate(host).dataset.state).toBe("correct");
+    expect(gate(host).querySelector<HTMLInputElement>("input")!.value).toBe("84");
+    expect(host.querySelector(".island")).not.toBeNull();
+    action("Reset")!.click();
+    expect(gate(host).dataset.state).toBe("idle");
+    expect(gate(host).querySelector<HTMLInputElement>("input")!.value).toBe("");
+    expect(host.querySelector(".island")).toBeNull();
+    expect(host.querySelector<HTMLElement>(".sim-gate-note")!.hidden).toBe(false);
   });
 });
 

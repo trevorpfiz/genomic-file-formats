@@ -110,7 +110,7 @@ export const broadChr1Header = {
       span: span("M5:6aef897c3d6ff0c78aff06ac189178dd"),
       name: "M5",
       meaning:
-        "The MD5 digest of the bases, computed after uppercasing and removing line breaks. SAM `@SQ M5` carries it, and CRAM uses it to check the reference.",
+        "The MD5 digest of the bases, computed after uppercasing and removing all whitespace (every character outside `!` to `~`). SAM `@SQ M5` carries it, and CRAM uses it to check the reference.",
       cite: "SAMv1 v1.6 §1.3, §1.3.2",
     },
     {

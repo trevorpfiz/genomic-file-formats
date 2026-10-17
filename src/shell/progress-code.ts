@@ -93,8 +93,19 @@ export function fromBase64Url(text: string): Uint8Array {
 // ---------------------------------------------------------------------------------------------
 // Compression (native streams only; no library ships, D-20)
 
-export const canCompress = (): boolean =>
-  typeof CompressionStream === "function" && typeof DecompressionStream === "function";
+/**
+ * Whether this browser can deflate-raw both ways. The classes alone are not enough: some
+ * engines (Chromium 80-102) have them without "deflate-raw", and constructing one then throws.
+ */
+export const canCompress = (): boolean => {
+  try {
+    new CompressionStream("deflate-raw");
+    new DecompressionStream("deflate-raw");
+    return true;
+  } catch {
+    return false;
+  }
+};
 
 async function pipe(bytes: Uint8Array, stream: CompressionStream | DecompressionStream): Promise<Uint8Array> {
   const body = new Blob([bytes as BlobPart]).stream().pipeThrough(stream as ReadableWritablePair);

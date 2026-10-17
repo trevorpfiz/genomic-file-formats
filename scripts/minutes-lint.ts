@@ -6,11 +6,13 @@
 // spot-the-error 0.75 per round; predict 0.5 per item; simulator 1 per goal; fix-it 1 per
 // expected starter rule; mcq 0.75; field-explorer 1 plus its check; follow-ups (and a predict
 // gate) by their own type. Read-more text and optional exercises are excluded.
-// Bounds: a written lesson rounds to 8-12 minutes (fail) and stays within 1 minute of its
-// frontmatter (warn); the 22 lessons total 185-195 (fail), counting the course-map minutes of
-// lessons not written yet. D-05's tie-break: 600 prose words is a ceiling and 8 minutes a floor,
-// so a lesson whose interactions leave it under 8 minutes at 600 words may keep the prose that
-// brings it to 8 (proseCap, which the content lint applies with a warning).
+// Bounds: a written lesson's estimate, unrounded, is 8-12 minutes (fail outside) and within 1
+// minute of its frontmatter (warn); the 22 lessons total 185-195 (fail), counting the course-map
+// minutes of lessons not written yet. D-05's tie-break: 600 prose words is a ceiling and 8
+// minutes a floor, so a lesson written to the cap (within AT_CAP_SLACK words of it) that still
+// measures under 8 minutes gets a warning, not an error: it may keep the prose that brings it
+// to 8 (proseCap, which the content lint applies with a warning). Under 8 minutes below the cap
+// is an error, since more prose (or practice) is allowed.
 //
 // A lesson is "written" once it has a graded interaction; stubs are reported, not judged.
 import { globSync, readFileSync } from "node:fs";
@@ -28,6 +30,8 @@ import type { Exercise, FollowUp } from "../src/exercises/types.ts";
 
 export const WORDS_PER_MINUTE = 150;
 export const PROSE_CAP = 600;
+/** A lesson within this many words of PROSE_CAP counts as written to the cap (about a sentence). */
+export const AT_CAP_SLACK = 15;
 export const MINUTES = { min: 8, max: 12, drift: 1, totalMin: 185, totalMax: 195 } as const;
 export const EXERCISE_DIRECTIVES = new Set([
   "spot-the-error",
@@ -305,8 +309,12 @@ export function lintMinutes(analyses: readonly Analysis[]): MinutesReport {
     rows.push(
       `${a.id.padEnd(26)} ${a.estimate.toFixed(2)} min (prose ${a.proseWords} words = ${(a.proseWords / WORDS_PER_MINUTE).toFixed(2)}, ${a.graded.length} interactions = ${a.interactionMinutes.toFixed(2)}); frontmatter ${a.minutes}`,
     );
-    const rounded = Math.round(a.estimate);
-    if (rounded < MINUTES.min || rounded > MINUTES.max)
+    const atCap = a.proseWords >= PROSE_CAP - AT_CAP_SLACK;
+    if (a.estimate < MINUTES.min && atCap)
+      warnings.push(
+        `${a.file}: the model gives ${a.estimate.toFixed(2)} min, under the ${MINUTES.min}-minute floor at the ${PROSE_CAP}-word cap; it may keep up to ${proseCap(a)} prose words (D-05)`,
+      );
+    else if (a.estimate < MINUTES.min || a.estimate > MINUTES.max)
       errors.push(
         `${a.file}: the model gives ${a.estimate.toFixed(2)} min, outside ${MINUTES.min}-${MINUTES.max}`,
       );

@@ -5,6 +5,7 @@ import { createHash } from "node:crypto";
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { join, relative } from "node:path";
 import { fileURLToPath } from "node:url";
+import { parseArgs } from "node:util";
 import { gzipSync } from "node:zlib";
 import { pagesUrl } from "./pages-url.mjs";
 
@@ -13,31 +14,41 @@ export const FALLBACK_TEXT = "This interactive course needs JavaScript.";
 /** 1.5 MB raw (docs/PLAN.md 11.5). */
 export const SIZE_LIMIT = 1.5 * 1024 * 1024;
 /**
- * Per-category budgets in KB: warnings, not failures (docs/PLAN.md 11.5). The plan's estimates
- * were replaced by the measured M1 baseline (M1_BASELINE_KB), scaled to the full course:
- * - lesson HTML: 4 lessons and 1 quiz page measured ~35 KB, so 22 lessons and 7 quizzes need
- *   about 200 KB; the estimate drops from 350 to 250 KB;
- * - app JS and CSS: the shell, seven exercise types, quiz page, three simulators, Preact and
- *   the CSS measured ~335 KB; nine more simulators, the capstone inspector and the badge
- *   exporter follow, so the estimate rises from 250 to 400 KB;
- * - the others keep the plan's estimates. The sum (1,400 KB) stays under SIZE_LIMIT.
+ * Per-category budgets in KB: warnings, not failures (docs/PLAN.md 11.5), checked against the
+ * measured M1 baseline (M1_BASELINE_KB; the size report minifies each category on its own, so
+ * string-heavy content is no longer under-counted):
+ * - lesson HTML: Section 2's four lessons measure about 10.3 KB each, and the quiz page, home
+ *   and About about 7 KB together. 22 lessons, 7 quiz pages, the capstone, home and About
+ *   project to about 240 KB, so the budget is 300 KB (the plan said 350);
+ * - app JS and CSS: the shell, seven exercise types, the quiz page, three simulators, Preact
+ *   and the CSS measure about 322 KB. M1's simulators average about 13 KB minified, so nine
+ *   more, the capstone inspector and the badge exporter project to about 460 KB, above the
+ *   400 KB budget kept here (the plan said 250); the owner decides between lighter simulators
+ *   and a larger budget (docs/PLAN.md 11.5);
+ * - exercise and quiz data: about 7 KB per lesson and 17 KB per quiz project to about 280 KB,
+ *   above the plan's 250 KB, which is kept for the same decision;
+ * - case data, runtime validators and fonts keep the plan's estimates.
+ * The sum (1,450 KB) stays under SIZE_LIMIT.
  */
 export const BUDGETS_KB = {
   fonts: 140,
-  "lesson HTML": 250,
+  "lesson HTML": 300,
   "exercise and quiz data": 250,
   "case data": 300,
   "runtime validators": 60,
   "app JS and CSS": 400,
 };
-/** M1's measured baseline in KB (Section 2 and Quiz 2 built), for comparison in the report. */
+/**
+ * M1's measured baseline in KB (Section 2 and Quiz 2 built, after the M1 review fixes), measured
+ * with the per-category minification of vite-plugin-size-report.ts, for comparison in the report.
+ */
 export const M1_BASELINE_KB = {
   fonts: 139.4,
-  "lesson HTML": 35.4,
-  "exercise and quiz data": 39.5,
-  "case data": 3.9,
-  "runtime validators": 8.5,
-  "app JS and CSS": 333.4,
+  "lesson HTML": 47.6,
+  "exercise and quiz data": 45.5,
+  "case data": 5.1,
+  "runtime validators": 7.9,
+  "app JS and CSS": 322.0,
 };
 /** Where vite-plugin-size-report.ts writes its per-module report, keyed by the HTML's SHA-256. */
 export const SIZE_REPORT_DIR = join(ROOT, "node_modules/.cache/gf-size-report");
@@ -59,6 +70,7 @@ export const TEST_ONLY_MESSAGES = join(ROOT, "src/validators/test-only-messages.
  * @typedef {object} SizeReport
  * @property {string} html SHA-256 of the index.html it describes.
  * @property {Record<string, number>} js Estimated minified JS bytes per category.
+ * @property {string} [method] "minified per category" or "rendered shares".
  */
 
 /**
@@ -220,7 +232,11 @@ export function checkDist(dir, options = {}) {
   const line = (name, bytes, note) => {
     const budget = /** @type {Record<string, number>} */ (BUDGETS_KB)[name];
     const baseline = /** @type {Record<string, number>} */ (M1_BASELINE_KB)[name];
-    const extra = [note, budget ? `budget ${budget} KB` : "", baseline ? `M1 baseline ${baseline} KB` : ""]
+    const extra = [
+      note,
+      budget ? `budget ${budget} KB` : "",
+      baseline ? `M1 baseline ${baseline.toFixed(1)} KB` : "",
+    ]
       .filter(Boolean)
       .join("; ");
     report.push(`  ${name.padEnd(24)} ${kb(bytes).padStart(10)}${extra ? `  (${extra})` : ""}`);
@@ -229,10 +245,12 @@ export function checkDist(dir, options = {}) {
   line("fonts", fontBytes, `${fontUris.length} woff2`);
   const sizes = readSizeReport(html, options.sizeReportDir);
   if (sizes) {
-    // JS per category is the build's module shares scaled to the minified script; CSS is exact.
+    // JS per category: each category minified on its own, scaled to the minified script (or
+    // rendered-length shares when a category did not minify); CSS is exact.
     const js = sizes.js;
     const app = (js["app JS and CSS"] ?? 0) + cssBytes;
-    line("lesson HTML", js["lesson HTML"] ?? 0, "estimated from module shares");
+    const how = sizes.method === "rendered shares" ? "estimated from module shares" : "minified per category";
+    line("lesson HTML", js["lesson HTML"] ?? 0, how);
     line("exercise and quiz data", js["exercise and quiz data"] ?? 0, "estimated");
     line("case data", js["case data"] ?? 0, "estimated");
     line("runtime validators", js["runtime validators"] ?? 0, "estimated; with the format parsers");
@@ -252,12 +270,25 @@ export function checkDist(dir, options = {}) {
   return { errors, warnings, report };
 }
 
+/**
+ * `[dir] [--fonts N]`, in any order (`--fonts 5 dist` and `dist --fonts=5` both work).
+ * @param {string[]} argv
+ */
+export function parseCli(argv) {
+  const { values, positionals } = parseArgs({
+    args: argv,
+    options: { fonts: { type: "string" } },
+    allowPositionals: true,
+  });
+  const fonts = Number(values.fonts ?? process.env.EXPECTED_WOFF2 ?? EXPECTED_FONTS);
+  if (!Number.isInteger(fonts) || fonts < 0)
+    throw new Error(`--fonts needs a whole number, got "${values.fonts}"`);
+  return { dir: positionals[0] ?? "dist", fonts };
+}
+
 /** @param {string[]} argv */
 function main(argv) {
-  const dir = argv.find((a) => !a.startsWith("--")) ?? "dist";
-  const fontsFlag = argv.indexOf("--fonts");
-  const fonts =
-    fontsFlag >= 0 ? Number(argv[fontsFlag + 1]) : Number(process.env.EXPECTED_WOFF2 ?? EXPECTED_FONTS);
+  const { dir, fonts } = parseCli(argv);
   const { errors, warnings, report } = checkDist(dir, { fonts });
   for (const line of report) console.log(`check-dist: ${line}`);
   for (const w of warnings) console.warn(`check-dist: warning: ${w}`);

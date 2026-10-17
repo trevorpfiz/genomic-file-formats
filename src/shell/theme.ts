@@ -58,17 +58,31 @@ export function initTheme(win: Window, store: StorageLike | null): void {
   });
 }
 
+/**
+ * The live controls, one per placement (its id prefix): a control built for a new route
+ * replaces the previous route's, so the shell rebuilding the aside and the sheet on every
+ * navigation never piles up listeners or keeps detached pages alive. One document listener
+ * updates them all.
+ */
+const controls = new Map<string, { element: HTMLElement; update: (choice: ThemeChoice) => void }>();
+let listening = false;
+
 /** Keep a control in step with the current choice while it is in the document. */
-function follow(element: HTMLElement, update: (choice: ThemeChoice) => void): void {
-  const listener = (event: Event) => {
-    if (!element.isConnected) {
-      document.removeEventListener(EVENT, listener);
-      return;
+function follow(key: string, element: HTMLElement, update: (choice: ThemeChoice) => void): void {
+  controls.set(key, { element, update });
+  if (listening) return;
+  listening = true;
+  document.addEventListener(EVENT, (event) => {
+    const choice = (event as CustomEvent<ThemeChoice>).detail;
+    for (const [id, control] of controls) {
+      if (control.element.isConnected) control.update(choice);
+      else controls.delete(id);
     }
-    update((event as CustomEvent<ThemeChoice>).detail);
-  };
-  document.addEventListener(EVENT, listener);
+  });
 }
+
+/** How many theme controls are tracked (tests). */
+export const trackedThemeControls = (): number => controls.size;
 
 /** "Theme: System" menu button (aside), or the icon-only form (top bar). */
 export function themeMenu(idPrefix: string, variant: "aside" | "icon"): HTMLElement {
@@ -88,7 +102,7 @@ export function themeMenu(idPrefix: string, variant: "aside" | "icon"): HTMLElem
     },
     onChange: (choice) => setTheme(choice),
   });
-  follow(menu.element, (choice) => menu.set(choice));
+  follow(idPrefix, menu.element, (choice) => menu.set(choice));
   return menu.element;
 }
 
@@ -118,7 +132,7 @@ export function themeRadios(idPrefix: string): HTMLElement {
       }),
     ),
   );
-  follow(group, (choice) => {
+  follow(idPrefix, group, (choice) => {
     for (const input of group.querySelectorAll<HTMLInputElement>("input"))
       input.checked = input.value === choice;
   });

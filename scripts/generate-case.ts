@@ -92,8 +92,9 @@ const FRAGMENTS: Fragment[] = [
     strand: "+",
     haplotype: "F2",
     tile: 1203,
-    x: 15410,
-    y: 22045,
+    // Not case.md's 15410:22045: that x/y belongs to the deletion-junction split read (M2).
+    x: 14762,
+    y: 20318,
     covers: "rs6432860",
     exon: 16,
   },

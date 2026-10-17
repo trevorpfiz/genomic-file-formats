@@ -4,8 +4,15 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, test } from "vite-plus/test";
-import { categoryOf } from "../plugins/vite-plugin-size-report.ts";
-import { BUDGETS_KB, checkDist, FALLBACK_TEXT, readDenylist, SIZE_LIMIT } from "../scripts/check-dist.mjs";
+import { apportion, categoryOf } from "../plugins/vite-plugin-size-report.ts";
+import {
+  BUDGETS_KB,
+  checkDist,
+  FALLBACK_TEXT,
+  parseCli,
+  readDenylist,
+  SIZE_LIMIT,
+} from "../scripts/check-dist.mjs";
 
 const URL = "https://example.github.io/course/";
 const fallback = `${FALLBACK_TEXT} Save the file and open it in a desktop browser, or use <a href="${URL}">${URL}</a>.`;
@@ -102,7 +109,7 @@ describe("per-category size report", () => {
     const reports = dist({ [`${hash}.json`]: JSON.stringify({ html: hash, js: categories }) });
     const { report, warnings, errors } = check({ "index.html": html }, 0, reports);
     expect(errors).toEqual([]);
-    expect(report.find((l) => l.includes("lesson HTML"))).toMatch(/2\.9 KB .*budget 250 KB/);
+    expect(report.find((l) => l.includes("lesson HTML"))).toMatch(/2\.9 KB .*budget 300 KB/);
     expect(report.find((l) => l.includes("app JS and CSS"))).toMatch(/410\.2 KB/);
     expect(warnings).toEqual(["app JS and CSS over the 400 KB budget"]);
   });
@@ -113,6 +120,22 @@ describe("per-category size report", () => {
     expect(report.some((l) => l.includes("no per-module size report"))).toBe(true);
     expect(report.some((l) => l.includes("lesson HTML"))).toBe(false);
     expect(warnings).toEqual([]);
+  });
+
+  test("apportion splits the minified chunk by per-category weights, adding up to it", () => {
+    const parts = apportion(
+      {
+        "lesson HTML": 48,
+        "exercise and quiz data": 46,
+        "case data": 5,
+        "runtime validators": 8,
+        "app JS and CSS": 248,
+      },
+      710,
+    );
+    expect(parts["lesson HTML"]).toBe(96);
+    expect(parts["app JS and CSS"]).toBe(496);
+    expect(Object.values(parts).reduce((a, b) => a + b, 0)).toBe(710);
   });
 
   test("the budgets fit under the hard limit", () => {
@@ -131,5 +154,20 @@ describe("per-category size report", () => {
     ["/repo/node_modules/preact/dist/preact.module.js", "app JS and CSS"],
   ])("module %s counts as %s", (id, category) => {
     expect(categoryOf(id)).toBe(category);
+  });
+});
+
+describe("the command line", () => {
+  test.each([
+    [["dist"], { dir: "dist", fonts: 5 }],
+    [["--fonts", "4", "dist"], { dir: "dist", fonts: 4 }],
+    [["out", "--fonts=0"], { dir: "out", fonts: 0 }],
+    [[], { dir: "dist", fonts: 5 }],
+  ])("%j", (argv, expected) => {
+    expect(parseCli(argv)).toEqual(expected);
+  });
+
+  test("a --fonts value that is not a whole number is refused", () => {
+    expect(() => parseCli(["--fonts", "x", "dist"])).toThrow("--fonts needs a whole number");
   });
 });

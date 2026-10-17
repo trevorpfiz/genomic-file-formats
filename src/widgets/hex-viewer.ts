@@ -3,7 +3,7 @@
 // tints, a decoded chip, and "View as table" listing each annotated range for screen readers.
 // Annotation offsets count the shown bytes: head first, then the tail as if it followed directly.
 import type { HexAnnotation, Snippet } from "../exercises/types.ts";
-import { el, liveRegion, uid } from "./dom.ts";
+import { el, isNarrow, liveRegion, onBreakpoint, uid } from "./dom.ts";
 import {
   displayFilename,
   downloadButton,
@@ -119,9 +119,8 @@ export function renderHexView(snippet: Snippet, options: SnippetViewerOptions = 
     block(layout.tail);
     body.replaceChildren(...rows);
   };
-  const narrow = doc.defaultView?.matchMedia?.("(max-width: 599px)");
-  draw(narrow?.matches ? 8 : 16);
-  narrow?.addEventListener?.("change", (e) => draw(e.matches ? 8 : 16));
+  draw(isNarrow(doc) ? 8 : 16);
+  onBreakpoint(body, (narrow) => draw(narrow ? 8 : 16));
 
   // Hovering a byte highlights its ASCII counterpart and vice versa.
   body.addEventListener("mouseover", (event) => {

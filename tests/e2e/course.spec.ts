@@ -95,19 +95,25 @@ test("the card-based predict widget and the Preact island work in the built file
     const simulator = document.createElement("gf-simulator") as HTMLElement & { data?: unknown };
     simulator.data = {
       ...base,
-      id: "e2e/ruler",
+      id: "e2e/find-the-byte",
       kind: "simulator",
-      simulator: "coordinate-ruler",
-      title: "Step the ruler",
-      prompt: "Step to the BED interval 166,014,901 to 166,014,902.",
-      init: { position: 166014900 },
+      simulator: "fai-calculator",
+      title: "Find the byte",
+      prompt: "Step to base 45 of `chrM_demo`.",
+      init: {
+        row: "chrM_demo\t60\t38\t20\t21",
+        label: "`toy.fa`",
+        header: ">chrM_demo first 60 bp of GRCh38 chrM",
+        sequence: "GATCACAGGTCTATCACCCTATTAACCACTCACGGGAGCTCTCCATGCATTTGGTATTTT",
+        position: 43,
+      },
       goals: [
         {
-          id: "reach",
-          text: "Reach the interval.",
-          when: "showsBedInterval",
-          args: { start: 166014901, end: 166014902 },
-          explanation: "Reached.",
+          id: "base-45",
+          text: "Find the byte that holds base 45.",
+          when: "showsBase",
+          args: { position: 45, row: "chrM_demo\t60\t38\t20\t21" },
+          explanation: "Byte 84.",
           witness: [],
         },
       ],
@@ -128,7 +134,7 @@ test("the card-based predict widget and the Preact island work in the built file
   const next = simulator.getByRole("button", { name: "Next base" });
   await next.click();
   await next.click();
-  await expect(simulator.locator(".readout")).toContainText("Goal reached.");
+  await expect(simulator.locator(".sim-goal[data-goal='base-45']")).toHaveAttribute("data-status", "reached");
   await expect(simulator).toHaveAttribute("data-state", "correct");
   expect(problems).toEqual([]);
 });
@@ -157,6 +163,22 @@ for (const colorScheme of ["light", "dark"] as const) {
     expect(serious.map((v) => `${v.id}: ${v.nodes.map((n) => n.target.join(" ")).join(", ")}`)).toEqual([]);
   });
 }
+
+test("if boot throws, the static fallback shows again (D-28)", async ({ page }) => {
+  const errors: string[] = [];
+  page.on("pageerror", (e) => errors.push(e.message));
+  await page.addInitScript(() => {
+    CustomElementRegistry.prototype.define = () => {
+      throw new Error("define unsupported");
+    };
+  });
+  await page.goto(COURSE);
+  const fallback = page.locator("#fallback");
+  await expect(fallback).toBeVisible();
+  await expect(fallback).toContainText(FALLBACK);
+  await expect(fallback.getByRole("link", { name: PAGES_URL })).toBeVisible();
+  expect(errors).toContain("define unsupported");
+});
 
 test.describe("without JavaScript", () => {
   test.use({ javaScriptEnabled: false });

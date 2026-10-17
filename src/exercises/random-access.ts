@@ -87,11 +87,12 @@ export const bgzfEofBlock = {
     ],
   },
   caption:
-    "The 28-byte BGZF end-of-file block (SAMv1 §4.1.2). Every BGZF block starts like this, with BC in its extra field; this one holds no data.",
+    "The 28-byte BGZF end-of-file block (SAMv1 §4.1.2). Every BGZF block has this shape, with flag `04` and a `BC` subfield, and `bgzip` writes these same first 16 bytes. This one holds no data.",
 } satisfies RegisteredSnippet;
 
 // ---------------------------------------------------------------------------------------------
-// L05.1 Try it · simulator (seq EX-02)
+// L05.1 Try it · simulator (seq EX-02). A predict gate asks for base 45's byte first, so the
+// learner applies the formula by hand before the calculator shows its arithmetic (7.5).
 
 const TOY_ROW = "chrM_demo\t60\t38\t20\t21";
 /** seq EX-02: GRCh38 chr1 in the iGenomes UCSC, iGenomes NCBI and Broad copies [verified: GRCh38]. */
@@ -114,12 +115,34 @@ export const findTheByte = {
   simulator: "fai-calculator",
   title: "Find the byte",
   prompt:
-    "Find the byte that holds base 45 of `chrM_demo`. Then load the three chr1 copies and find chr1:10,001 in each.",
+    "Predict the byte that holds base 45 of `chrM_demo`, then check it. Then load the three chr1 copies and find chr1:10,001 in each.",
   source: "seq EX-02",
   tags: ["application", "LO3"],
   formats: ["fai", "fasta"],
   concepts: ["fai.columns", "fai.byte-offset", "fai.one-file"],
   init: { ...TOY, position: 1 },
+  predictGate: {
+    id: "gate",
+    kind: "predict",
+    prompt: "Use the formula and this row of `toy.fa.fai` before you open the calculator.",
+    snippet: {
+      filename: "toy.fa.fai",
+      format: "fai",
+      kind: "text",
+      text: `${TOY_ROW}\n`,
+      provenance: "toy",
+      view: { aligned: true, whitespace: true },
+    },
+    items: [
+      {
+        id: "byte",
+        label: "Which byte holds base 45 of `chrM_demo`?",
+        input: { type: "number", answer: 84, tolerance: 0 },
+        computeWith: { helper: "faiByte", args: { row: TOY_ROW, position: 45 } },
+      },
+    ],
+    reveal: "p = 44: two full lines of 21 bytes, then 4 more, so 38 + 2 × 21 + 4 = byte 84.",
+  },
   presets: [
     { label: "`toy.fa`", state: TOY },
     {
@@ -164,10 +187,11 @@ export const findTheByte = {
   goals: [
     {
       id: "base-45",
-      text: "Find the byte that holds base 45 of `chrM_demo`.",
+      text: "Check your byte: show base 45 of `chrM_demo`.",
       when: "showsBase",
       args: { position: 45, row: TOY_ROW },
-      explanation: "p = 44: two full lines of 21 bytes, then 4 more, so 38 + 2 × 21 + 4 = byte 84, an `A`.",
+      explanation:
+        "The calculator agrees: 38 + 2 × 21 + 4 = byte 84, an `A`. Each row of its table is one term of the formula.",
       witness: [{ type: "position", position: 45 }],
     },
     {
@@ -176,7 +200,7 @@ export const findTheByte = {
       when: "comparedRows",
       args: { position: 10_001, rows: [UCSC_CHR1, NCBI_CHR1, BROAD_CHR1] },
       explanation:
-        "The same base is byte 10206, 10254 and 10212 in the three files. A `.fai` belongs to exactly one file.",
+        "The same base is byte `10206`, `10254` and `10212` in the three files. A `.fai` belongs to exactly one file.",
       witness: [
         { type: "preset", state: { row: UCSC_CHR1 } },
         { type: "position", position: 10_001 },
@@ -186,7 +210,7 @@ export const findTheByte = {
     },
   ],
   hints: [
-    "Type 45 in the position field; the formula fills in its values.",
+    "Type 45 in the position field and compare the Byte row with your prediction.",
     "Pick UCSC chr1, set the position to 10001, then pick the NCBI and Broad files. The position stays.",
   ],
   textView: "table",
@@ -216,23 +240,18 @@ export const whatWillTheIndexHold = {
     },
     {
       id: "offset",
-      label:
-        "The header `>chr1_tel` and its newline fill the first 10 bytes. Which OFFSET does `chr1_tel` get?",
-      input: {
-        type: "choice",
-        options: ["10: bytes are counted from 0", "11: bytes are counted from 1"],
-        answer: 0,
-      },
+      label: "Which OFFSET does `chr1_tel` get?",
+      input: { type: "number", answer: 10, tolerance: 0 },
       computeWith: {
         helper: "faiField",
         args: { fasta: EMPTY_RECORD_FA, name: "chr1_tel", field: "OFFSET" },
       },
       reveal:
-        "OFFSET is a 0-based byte offset: bytes 0 to 9 hold the header line, so the first base is byte 10.",
+        "`>chr1_tel` is 9 characters plus a newline, bytes 0 to 9. OFFSET counts from 0, so the first base is byte 10.",
     },
   ],
   reveal:
-    'The rows are `chr1_tel 36 10 20 21` and `chrM_demo 20 72 20 21`. A later lookup of `chrUn_empty` fails with "not found", far from the cause. Add OFFSET to your crosswalk: 0-based.',
+    'The rows are `chr1_tel 36 10 20 21` and `chrM_demo 20 72 20 21`. A later lookup of `chrUn_empty` fails with "not found", far from the cause. Like a BED start, OFFSET counts from 0.',
 } satisfies PredictExercise;
 
 // ---------------------------------------------------------------------------------------------
@@ -326,7 +345,7 @@ export const whyBgzip = {
   kind: "mcq",
   title: "Why bgzip and not gzip?",
   prompt: "",
-  source: "found Q4",
+  source: "found Q4 (options rebalanced in length; distractor c replaced)",
   tags: ["concept", "validity", "LO2"],
   formats: ["bgzf", "gzip", "tbi"],
   concepts: ["compression.gzip-vs-bgzf", "compression.virtual-offset"],
@@ -335,28 +354,29 @@ export const whyBgzip = {
   options: [
     {
       id: "a",
-      text: "gzip uses a different compression algorithm.",
+      text: "gzip uses a different compression algorithm, one that tabix cannot read.",
       correct: false,
       explanation: "Not quite. Both use DEFLATE, and any gzip reader can decompress a BGZF file.",
     },
     {
       id: "b",
-      text: "BGZF compresses independent blocks of at most 64 KiB, so an index can point at a block start. A gzip stream can only be read from its beginning.",
+      text: "BGZF compresses independent blocks, so an index can point at a block start.",
       correct: true,
       explanation:
-        "Correct. Independent blocks make virtual offsets possible: seek to the block, inflate it alone, skip `uoffset` bytes.",
+        "Correct. A gzip stream can only be read from its beginning. Independent blocks make virtual offsets possible: seek to the block, inflate it alone, skip `uoffset` bytes.",
     },
     {
       id: "c",
-      text: "tabix only reads uncompressed files.",
+      text: "`bgzip` stores the index inside the compressed file, and gzip has nowhere to put it.",
       correct: false,
-      explanation: "Not quite. tabix needs BGZF-compressed input; it does not index plain text.",
+      explanation: "Not quite. `tabix` writes the index to a separate `.tbi` file. `bgzip` only compresses.",
     },
     {
       id: "d",
-      text: "gzip files have no EOF marker.",
+      text: "gzip files have no EOF marker, so tabix cannot tell where the data ends.",
       correct: false,
-      explanation: "Not quite. The EOF block detects truncation. It does not make random access possible.",
+      explanation:
+        "Not quite. A gzip stream ends with its own trailer. BGZF's EOF block detects truncation; it does not make random access possible.",
     },
   ],
 } satisfies McqExercise;

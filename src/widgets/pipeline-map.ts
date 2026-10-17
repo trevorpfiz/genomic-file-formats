@@ -1,9 +1,11 @@
 // gf-pipeline-map (docs/PLAN.md 7.8; ux 4.10): the case pipeline as an inline SVG, with an
 // ordered list as its text equivalent. `highlight="fasta,fastq"` marks the current nodes (the
 // section openers): an accent outline and fill, a bold label and "(this section)" in the list,
-// so the state never rests on colour alone. The main line runs left to right; BED, WIG and
-// GTF/GFF3 hang below it as side branches. Below 600 px the map turns vertical, top to bottom,
-// with the branches to the right. Visited and mastered states (progress) arrive with the M3 map.
+// so the state never rests on colour alone. On wide screens the main line runs left to right in
+// two rows of four (a return line joins them), and BED, WIG and GTF/GFF3 hang below their
+// nodes as side branches; the SVG is drawn at 1.25 times its viewBox, so its 12px labels never
+// render below 12px (ux 4.10). Below 600 px the map turns vertical, top to bottom, with the
+// branches to the right. Visited and mastered states (progress) arrive with the M3 map.
 import { PIPELINE_NODES, type PipelineNode } from "../shell/pipeline-nodes.ts";
 import { el } from "./dom.ts";
 
@@ -11,6 +13,10 @@ const SVG = "http://www.w3.org/2000/svg";
 const W = 96;
 const H = 44;
 const GAP = 22;
+/** Main nodes per row on wide screens. */
+const COLS = 4;
+/** Drawn size over viewBox size: labels are 12 viewBox units, so 15px on screen. */
+const SCALE = { wide: 1.25, narrow: 1.4 };
 
 /** Split a label into lines of at most about 11 characters. */
 function lines(label: string): string[] {
@@ -39,15 +45,21 @@ interface Placed {
   y: number;
 }
 
-/** Positions: the main line in order; each branch beside the main node before it. */
+type LinkKind = "main" | "branch" | "return";
+
+/**
+ * Positions: the main line in order (wide: rows of COLS, each row below the previous row's
+ * branches); each branch beside (narrow) or below (wide) the main node before it.
+ */
 function layout(vertical: boolean): {
   placed: Placed[];
   width: number;
   height: number;
-  links: [Placed, Placed, boolean][];
+  links: [Placed, Placed, LinkKind][];
 } {
   const placed: Placed[] = [];
-  const links: [Placed, Placed, boolean][] = [];
+  const links: [Placed, Placed, LinkKind][] = [];
+  const rowHeight = 2 * (H + GAP * 1.5);
   let main = 0;
   let previous: Placed | undefined;
   for (const node of PIPELINE_NODES) {
@@ -56,11 +68,13 @@ function layout(vertical: boolean): {
         ? { node, x: previous.x + W + GAP * 1.5, y: previous.y }
         : { node, x: previous.x, y: previous.y + H + GAP * 1.5 };
       placed.push(p);
-      links.push([previous, p, true]);
+      links.push([previous, p, "branch"]);
       continue;
     }
-    const p = vertical ? { node, x: 8, y: 8 + main * (H + GAP) } : { node, x: 8 + main * (W + GAP), y: 8 };
-    if (previous) links.push([previous, p, false]);
+    const p = vertical
+      ? { node, x: 8, y: 8 + main * (H + GAP) }
+      : { node, x: 8 + (main % COLS) * (W + GAP), y: 8 + Math.floor(main / COLS) * rowHeight };
+    if (previous) links.push([previous, p, !vertical && main % COLS === 0 ? "return" : "main"]);
     placed.push(p);
     previous = p;
     main += 1;
@@ -72,13 +86,30 @@ function layout(vertical: boolean): {
 
 function draw(doc: Document, highlight: ReadonlySet<string>, vertical: boolean): SVGSVGElement {
   const { placed, width, height, links } = layout(vertical);
+  const scale = vertical ? SCALE.narrow : SCALE.wide;
   const svg = svgEl(doc, "svg", {
     viewBox: `0 0 ${width} ${height}`,
+    width: Math.round(width * scale),
+    height: Math.round(height * scale),
     class: "pipeline-map-svg",
     focusable: "false",
   });
   svg.setAttribute("aria-hidden", "true");
-  for (const [from, to, branch] of links) {
+  for (const [from, to, kind] of links) {
+    if (kind === "return") {
+      // Down from the row's last node, back along the gap above the next row, down into it.
+      const mid = to.y - GAP * 0.75;
+      const [tx, ty] = [to.x + W / 2, to.y - 5];
+      svg.append(
+        svgEl(doc, "path", { d: `M${from.x + W / 2} ${from.y + H} V${mid} H${tx} V${ty}`, class: "pm-link" }),
+        svgEl(doc, "polygon", {
+          points: `${tx} ${ty} ${tx - 4} ${ty - 6} ${tx + 4} ${ty - 6}`,
+          class: "pm-head",
+        }),
+      );
+      continue;
+    }
+    const branch = kind === "branch";
     let d: string;
     if (branch) {
       d = vertical
@@ -126,16 +157,28 @@ function draw(doc: Document, highlight: ReadonlySet<string>, vertical: boolean):
 }
 
 export class PipelineMapElement extends HTMLElement {
+  #narrow: MediaQueryList | undefined;
+  #render: (() => void) | undefined;
+
   connectedCallback(): void {
-    if (this.firstElementChild) return;
+    if (!this.firstElementChild) this.#build();
+    // Listen only while connected, so a page that is navigated away is not kept alive.
+    if (this.#render) this.#narrow?.addEventListener?.("change", this.#render);
+    this.#render?.();
+  }
+
+  disconnectedCallback(): void {
+    if (this.#render) this.#narrow?.removeEventListener?.("change", this.#render);
+  }
+
+  #build(): void {
     const doc = this.ownerDocument;
     const highlight = new Set((this.getAttribute("highlight") ?? "").split(",").filter(Boolean));
     const figure = el(doc, "figure", "pipeline-map");
     const drawing = el(doc, "div", "pipeline-map-drawing");
     const narrow = doc.defaultView?.matchMedia?.("(max-width: 599px)");
-    const render = () => drawing.replaceChildren(draw(doc, highlight, narrow?.matches ?? false));
-    render();
-    narrow?.addEventListener?.("change", render);
+    this.#narrow = narrow;
+    this.#render = () => drawing.replaceChildren(draw(doc, highlight, narrow?.matches ?? false));
     const list = el(doc, "ol", "pipeline-map-list");
     list.setAttribute("aria-label", "Pipeline map");
     for (const node of PIPELINE_NODES) {

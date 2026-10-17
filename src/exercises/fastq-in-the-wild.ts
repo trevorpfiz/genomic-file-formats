@@ -10,7 +10,8 @@ import type { PredictExercise, Snippet, SortExercise, SpotTheErrorExercise } fro
 
 // ---------------------------------------------------------------------------------------------
 // L07.1 Quick check · predict (seq EX-10): a wrapped file whose quality lines start with `@`
-// and `+`. The snippet is shown inside the predict card.
+// and `+`. The snippet is shown inside the predict card. A fourth item cuts the same file inside
+// `r2` (FQ-S06), so the Recap's "A file that ends inside a record is Invalid" has practice.
 
 const WRAPPED = [
   "@r1",
@@ -45,7 +46,7 @@ export const howManyRecords = {
   source: "seq EX-10",
   tags: ["application"],
   formats: ["fastq"],
-  concepts: ["fastq.wrapped", "fastq.record"],
+  concepts: ["fastq.wrapped", "fastq.record", "fastq.truncation", "validity.verdicts"],
   snippet: WRAPPED_SNIPPET,
   items: [
     {
@@ -71,6 +72,13 @@ export const howManyRecords = {
         answer: 1,
       },
       reveal: "`r1` still needs 12 quality characters after line 5, so line 6 is quality: `@` is Q31.",
+    },
+    {
+      id: "cut",
+      label: "A transfer cuts the file after line 8, the bases of `r2`. What is its verdict?",
+      input: { type: "choice", options: ["Valid", "Valid but unusable here", "Invalid"], answer: 2 },
+      reveal:
+        "Invalid: the file ends inside `r2`, after its bases and before its `+` line (FQ-S06). A lenient parser may still return both reads without an error.",
     },
   ],
   reveal:
@@ -100,7 +108,7 @@ export const threeBrokenRecords = {
   id: "fastq-in-the-wild/three-broken-records",
   kind: "spot-the-error",
   title: "Three broken records",
-  prompt: "Each record has one line that breaks the FASTQ rules. Select that line, then check.",
+  prompt: "Each record has one line that breaks the FASTQ rules. Select that line, then select Check.",
   source: "seq EX-09",
   tags: ["validity", "LO2", "LO4"],
   formats: ["fastq"],
@@ -244,7 +252,7 @@ export const whichFileIsThis = {
       label: "File 2",
       content: item(2, ">sp|P69905|HBA_HUMAN Hemoglobin subunit alpha\nMVLSPADKTNVKAAWGKVGAHAGEYGAEALERMF\n"),
       bin: "fasta-protein",
-      why: "A FASTA header, but `E`, `F`, `L`, `P` and `Q` are not nucleotide codes. This is the start of a UniProt protein record.",
+      why: "A FASTA header, but `E`, `F`, `L` and `P` are not nucleotide codes. This is the start of a UniProt protein record.",
     },
     {
       id: "sam-header",
@@ -295,7 +303,8 @@ export const whichFileIsThis = {
         hex: {
           head: "1f 8b 08 04 00 00 00 00 00 ff 06 00 42 43 02 00",
           annotations: [
-            { from: 0, to: 3, label: "gzip magic" },
+            { from: 0, to: 2, label: "gzip magic" },
+            { from: 2, to: 3, label: "method 8: DEFLATE" },
             { from: 12, to: 16, label: "BC extra subfield" },
           ],
         },
@@ -303,7 +312,7 @@ export const whichFileIsThis = {
         hideIdentity: true,
       },
       bin: "invalid",
-      why: "These bytes are BGZF: the gzip magic `1f 8b 08`, then a `BC` subfield. BGZF can hold FASTA, FASTQ or BAM; decompress it to find out.",
+      why: "These bytes are BGZF: the gzip magic `1f 8b`, method `08`, then a `BC` subfield. BGZF can hold FASTA, FASTQ or BAM; decompress it to find out.",
     },
   ],
 } satisfies SortExercise;

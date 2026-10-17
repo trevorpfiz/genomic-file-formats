@@ -44,10 +44,21 @@
   color: var(--border-strong);
 }
 
+/* On phones the trail stays on one line: the section crumb is cut short with an ellipsis (its
+   title attribute holds the full name) instead of wrapping with "/" at the start of a line. */
 @media (max-width: 479px) {
-  .breadcrumb li:last-child a {
+  .breadcrumb ol {
+    flex-wrap: nowrap;
+  }
+  .breadcrumb li:first-child {
+    flex: none;
+  }
+  .breadcrumb li:last-child:not(:first-child) {
+    flex: 0 1 auto;
+  }
+  .breadcrumb li:last-child:not(:first-child) a {
     display: block;
-    max-width: 14rem;
+    min-width: 0;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -158,17 +169,19 @@
   }
 }
 
-.prose ul,
-.prose ol {
+/* Authored lists only: the compiler emits them without a class, while every widget and shell
+   list has a class and styles itself (quiz questions, sort pools, fix-it goals and problems,
+   the pipeline map's list, badge requirements). */
+.prose :is(ul, ol):not([class]) {
   margin: 0 0 1.1em;
   padding-left: 1.4em;
 }
 
-.prose li {
+.prose :is(ul, ol):not([class]) > li {
   margin: 0.5em 0;
 }
 
-.prose li::marker {
+.prose :is(ul, ol):not([class]) > li::marker {
   color: var(--text-muted);
 }
 

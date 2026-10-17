@@ -9,6 +9,7 @@ import type { McqExercise, SimulatorExercise } from "../exercises/types.ts";
 import { MemoryProgressStore, setProgressStore } from "./card.ts";
 import { choose, mount, press, queries, type } from "./test-utils.ts";
 import "./mcq.ts";
+import { FIND_THE_BYTE } from "./simulators/test-fixtures.ts";
 import "./simulator.tsx";
 
 const MCQ: McqExercise = {
@@ -143,46 +144,33 @@ describe("an mcq with a predict follow-up", () => {
 describe("a simulator with follow-ups", () => {
   test("reaching every goal waits for the follow-ups", async () => {
     const SIM: SimulatorExercise = {
-      id: "test-lesson/ruler-follow",
-      kind: "simulator",
-      simulator: "coordinate-ruler",
-      title: "Step the ruler",
-      prompt: "",
-      source: "test",
-      tags: ["concept"],
-      formats: ["bed"],
-      concepts: ["coords.zero-based"],
-      init: { position: 166_014_900 },
-      goals: [
-        {
-          id: "reach",
-          text: "Reach the interval.",
-          when: "showsBedInterval",
-          args: { start: 166_014_900, end: 166_014_901 },
-          explanation: "Reached.",
-          witness: [],
-        },
-      ],
-      textView: "table",
+      ...FIND_THE_BYTE,
+      id: "test-lesson/byte-follow",
+      goals: [FIND_THE_BYTE.goals[0]!],
       followUps: [
         {
           id: "why",
           kind: "mcq",
           prompt: "",
           multi: false,
-          stem: "Is a BED start 0-based?",
+          stem: "Does a `.fai` row fit another copy of the same assembly?",
           options: [
-            { id: "y", text: "Yes", correct: true, explanation: "BED starts count from 0." },
-            { id: "n", text: "No", correct: false, explanation: "They do." },
+            { id: "y", text: "No", correct: true, explanation: "Offsets and widths differ per file." },
+            { id: "n", text: "Yes", correct: false, explanation: "The offsets differ." },
           ],
         },
       ],
     };
     const { host, solved } = mount("gf-simulator", SIM);
-    const next = [...host.querySelectorAll("button")].find((b) => b.textContent === "Next base");
-    if (!next) return; // the ruler view belongs to another owner; skip if its controls change
-    next.click();
-    await vi.waitFor(() => expect(host.querySelector(".readout")?.textContent).toMatch(/^Goal reached/));
+    const label = [...host.querySelectorAll("label")].find(
+      (l) => l.textContent?.trim() === "Position (1-based)",
+    )!;
+    type(document.getElementById(label.htmlFor) as HTMLInputElement, "45");
+    await vi.waitFor(() =>
+      expect(host.querySelector<HTMLElement>(".sim-goal[data-goal='base-45']")?.dataset.status).toBe(
+        "reached",
+      ),
+    );
     expect(host.dataset.state).toBe("attempted");
     expect(solved).not.toHaveBeenCalled();
     const fu = followUp(host);

@@ -21,7 +21,7 @@ export const genomeOrExome = {
   kind: "predict",
   title: "Genome or exome?",
   prompt:
-    "One sample yields 60 million read pairs of 2×150 bases. Use C = N·L/G to decide what kind of library it is.",
+    "One sample yields 60 million read pairs of 2×150 bases. Is it a genome or an exome? Use C = N·L/G over both sizes.",
   source: "found EX-11",
   tags: ["application"],
   formats: ["fastq"],
@@ -38,15 +38,19 @@ export const genomeOrExome = {
       reveal: "60 M pairs × 2 × 150 = 18 Gb, and 18 Gb ÷ 3.1 Gb is about 5.8×.",
     },
     {
-      id: "kind",
-      label: "So what is this sample?",
-      input: { type: "choice", options: ["A 30× genome", "A deep exome"], answer: 1 },
+      id: "exome-depth",
+      label: "Raw mean depth if they were spread over a 40-Mb exome target",
+      input: { type: "number", answer: 450, tolerance: 10, unit: "×" },
+      computeWith: {
+        helper: "meanDepth",
+        args: { pairs: 60_000_000, readLength: 150, size: 40_000_000 },
+      },
       reveal:
-        "An exome. Over a 40-Mb target the same 18 Gb is about 450× raw. A 30× genome needs about 620 M reads of 150 bases.",
+        "18 Gb ÷ 40 Mb = 450× raw. Off-target reads and duplicates bring the usable target depth well below that.",
     },
   ],
   reveal:
-    "Depth is bases sequenced divided by the size of what was sequenced. Tens of millions of read pairs are an exome-sized number.",
+    "An exome: 5.8× is far too shallow for a genome. Depth is bases sequenced over the size of what was sequenced; a 30× genome needs about 620 M reads of 150 bases.",
 } satisfies PredictExercise;
 
 // ---------------------------------------------------------------------------------------------
@@ -60,7 +64,7 @@ export const qualityAsProbability = {
   simulator: "phred-converter",
   title: "Quality as probability",
   prompt:
-    "Each quality character stands for a Phred score Q. Enter `I`, `5`, `?` and `#` one at a time, and read each one's Q and error probability.",
+    "Each quality character stands for a Phred score Q = −10·log10(P), where P is the chance that the base call is wrong. Enter `I`, `5`, `?` and `#` one at a time, and read each one's Q and P.",
   source: "found EX-05; seq EX-07",
   tags: ["application", "LO6"],
   formats: ["fastq"],
@@ -285,5 +289,5 @@ export const noaFirstRead = {
   text: probandR1?.records[0] ? fastqRecordText(probandR1.records[0]) : "",
   provenance: "case",
   caption:
-    "The first record of Noa's R1 file, `P042-proband_S1_L001_R1_001.fastq.gz`, decompressed. Read names and qualities are illustrative.",
+    "The first record of Noa's R1 file, `P042-proband_S1_L001_R1_001.fastq.gz`, decompressed: 150 bases with binned qualities, the same layout as above. Read names and qualities are illustrative. This read happens to show only three of the four quality values: no base drew `#`.",
 } satisfies RegisteredSnippet;

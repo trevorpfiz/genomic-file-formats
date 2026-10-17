@@ -59,6 +59,7 @@ export function FaiCalculatorView(props: SimulatorViewProps) {
       <Presets
         presets={exercise.presets}
         label="Files"
+        isCurrent={(s) => !state.file.edited && s.label === state.file.label}
         onPick={(s) => dispatch({ type: "preset", state: s })}
       />
 

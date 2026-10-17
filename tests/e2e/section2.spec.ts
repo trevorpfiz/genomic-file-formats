@@ -188,6 +188,14 @@ async function followUps(page: Page, card: Locator, list: FollowUp[] | undefined
 
 /** The simulators of Section 2, driven through their controls by each goal's witness actions. */
 async function runSimulator(page: Page, card: Locator, exercise: SimulatorExercise): Promise<void> {
+  if (exercise.predictGate) {
+    // The prediction comes first: the island opens once it is locked in (7.5).
+    const gate = card.locator(".sim-gate");
+    await answer(page, gate.locator(".card-body"), exercise.predictGate);
+    await check(page);
+    await expect(gate).toHaveAttribute("data-state", "correct");
+    await expect(card.locator(".island")).toBeVisible();
+  }
   for (const goal of exercise.goals) {
     for (const action of goal.witness as Record<string, unknown>[]) {
       if (action.type === "preset") {
@@ -450,6 +458,27 @@ for (const colorScheme of ["light", "dark"] as const) {
         expect(problems).toEqual([]);
       });
     }
+
+    // Phone width (and 400% zoom at 1280 px is 320 CSS px): wide code and snippets scroll inside
+    // their own regions, which must then be focusable (axe scrollable-region-focusable).
+    for (const width of [390, 320])
+      test(`every Section 2 page and the quiz at ${width} px, Read-mores open`, async ({ page }) => {
+        const problems = watch(page);
+        await page.setViewportSize({ width, height: 800 });
+        const found: string[] = [];
+        for (const entry of [...LESSONS, QUIZ]) {
+          await page.goto(`${COURSE}${entry.route}`);
+          await expect(page.locator("h1")).toHaveText(entry.title);
+          await page
+            .locator("main details:not([open]) > summary")
+            .evaluateAll((els) =>
+              els.forEach((s) => (s.parentElement as HTMLDetailsElement).setAttribute("open", "")),
+            );
+          found.push(...(await axeSerious(page, `${entry.id} at ${width} px`)));
+        }
+        expect(found).toEqual([]);
+        expect(problems).toEqual([]);
+      });
 
     test("quiz: fresh, then submitted unanswered with its review links", async ({ page }) => {
       const problems = watch(page);

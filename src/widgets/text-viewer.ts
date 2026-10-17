@@ -221,6 +221,11 @@ export class SnippetViewer {
         this.#grid.setAttribute("aria-multiselectable", String(options.multi ?? true));
       this.#grid.addEventListener("keydown", (event) => this.#onKey(event));
       this.#grid.addEventListener("click", (event) => this.#onClick(event));
+      // A pointer press would focus the cell natively, with the sideways jump; the click
+      // handler focuses it through focusCell instead.
+      this.#grid.addEventListener("mousedown", (event) => {
+        if (event.button === 0 && this.#keyOf(event.target)) event.preventDefault();
+      });
       this.#grid.addEventListener("focusin", (event) => this.#onFocus(event, "focus"));
       this.#grid.addEventListener("mouseover", (event) => this.#onFocus(event, "hover"));
       this.#grid.addEventListener("mouseleave", () => this.onFocusCell?.(null, "hover"));
@@ -340,7 +345,40 @@ export class SnippetViewer {
     const target = key ?? this.#active ?? this.cells[0]?.key;
     if (!target) return;
     this.#setActive(target);
-    this.#cellEls.get(target)?.focus();
+    const node = this.#cellEls.get(target);
+    if (node) this.#focusSteady(node);
+  }
+
+  /**
+   * Focus a cell without the sideways jump. A line cell is as wide as the longest line, and
+   * browsers align the start of an element wider than the view with the scroll padding, which
+   * would scroll the "Lengths and separators" descriptions out of view. So the horizontal scroll
+   * stays put when the cell's start is visible and the cell is wider than the view; otherwise
+   * the browser scrolls, and the cell's start is then moved clear of the sticky gutter.
+   */
+  #focusSteady(node: HTMLElement): void {
+    const body = this.#body;
+    const gutterEdge = () => {
+      let edge = body.getBoundingClientRect().left;
+      const row = node.closest(".snippet-line");
+      for (const g of row?.querySelectorAll<HTMLElement>(".snippet-ln, .snippet-info") ?? []) {
+        const r = g.getBoundingClientRect();
+        if (r.width) edge = Math.max(edge, r.right);
+      }
+      return edge;
+    };
+    const left = body.scrollLeft;
+    const edge = gutterEdge();
+    const view = body.getBoundingClientRect();
+    const rect = node.getBoundingClientRect();
+    const keep = rect.left >= edge - 1 && rect.left < view.right && rect.width > view.right - edge;
+    node.focus();
+    if (keep) {
+      body.scrollLeft = left;
+      return;
+    }
+    const gap = gutterEdge() - node.getBoundingClientRect().left;
+    if (gap > 0) body.scrollLeft -= gap;
   }
 
   // --- Toolbar --------------------------------------------------------------------------------
@@ -501,6 +539,13 @@ export class SnippetViewer {
     if (this.#aligned) nodes.push(this.#columnHeads(widths));
 
     const lines = this.lines.slice(0, MAX_LINES);
+    // One width for every line's description, so the text starts at the same x on every line
+    // and lengths compare by eye (widgets.css .snippet-info).
+    const infoChars = Math.max(
+      this.#aligned ? "description".length : 0,
+      ...lines.map((l) => l.description.length),
+    );
+    this.#grid.style.setProperty("--snippet-info-chars", String(infoChars));
     for (const line of lines) {
       const row = el(doc, "div", "snippet-line");
       row.dataset.line = String(line.n);
@@ -527,7 +572,8 @@ export class SnippetViewer {
       const first = this.#rows[0]?.[0];
       if (!this.#active || !this.#cellEls.has(this.#active)) this.#active = first;
       if (this.#active) this.#cellEls.get(this.#active)!.tabIndex = 0;
-      if (hadFocus && focusedKey) this.#cellEls.get(focusedKey)?.focus();
+      const refocus = hadFocus && focusedKey ? this.#cellEls.get(focusedKey) : undefined;
+      if (refocus) this.#focusSteady(refocus);
     }
   }
 

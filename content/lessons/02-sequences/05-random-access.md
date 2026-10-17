@@ -26,12 +26,12 @@ specs:
     "SAMv1 v1.6 §4.1, §4.1.2",
     "tabix.tex",
   ]
-summary: "How a .fai finds any base by arithmetic, and why only BGZF files can be indexed."
+summary: "How a .fai finds any base by arithmetic, and why a compressed file must be BGZF, not gzip, to be indexed."
 ---
 
 ## The .fai: five numbers per sequence
 
-A tool that needs 100 bases of chr2 should not read 3 GB to find them. `samtools faidx ref.fa` writes a small text index, `ref.fa.fai`, with one row per sequence. Here are `toy.fa` from the last lesson and its index: <!-- src: seq §1 (.fai purpose), §3.1 -->
+A tool that needs 100 bases of chr2 should not read 3 GB to find them. `samtools faidx ref.fa` writes a small text index, `ref.fa.fai`, with one row per sequence. Here are `toy.fa` and its index: <!-- src: seq §1 (.fai purpose), §3.1 -->
 
 ::snippet{id="random-access/toy-fa"}
 
@@ -39,7 +39,7 @@ A tool that needs 100 bases of chr2 should not read 3 GB to find them. `samtools
 
 - **NAME** is the first word of the header.
 - **LENGTH** is the number of bases, equal to `LN` in the SAM `@SQ` line.
-- **OFFSET** is the byte where the first base starts. The `chrM_demo` header is 37 characters plus a newline, so its first base is byte 38.
+- **OFFSET** is the byte where the first base starts, counted from 0. The `chrM_demo` header is 37 characters plus a newline, so its first base is byte 38.
 - **LINEBASES** is the number of bases on each full line.
 - **LINEWIDTH** is the number of bytes on each full line, line terminator included: 21 with LF. <!-- src: faidx(5); seq §3.2 -->
 
@@ -55,11 +55,11 @@ For the base at 0-based position p (the 1-based position minus 1), the byte is: 
 byte = OFFSET + floor(p / LINEBASES) * LINEWIDTH + (p mod LINEBASES)
 ```
 
-Full lines before the base, times bytes per line, plus the column: constant line width at work. <!-- src: seq §2 -->
+Full lines times bytes per line, plus the column: constant line width at work. <!-- src: seq §2 -->
 
 :::watch-out
 
-A `.fai` describes one exact file. Edit the FASTA, even one header, and every later offset points at the wrong bytes. samtools 1.24 does not notice: after a header edit it returned header text as if it were sequence. Rebuild the index after any edit. <!-- src: seq FA-M05, pitfall 4, Q7 [verified: test] -->
+A `.fai` describes one exact file. Change the length of any line, even a header, and every later offset points at the wrong bytes. samtools 1.24 does not notice: after a header edit it returned header text as if it were sequence. Rebuild the index after any edit. <!-- src: seq FA-M05, pitfall 4, Q7 [verified: test] -->
 
 :::
 
@@ -93,7 +93,7 @@ A `.gzi` is binary: a count, then one pair of 64-bit numbers (compressed offset,
 
 :::
 
-The same trade-off returns for BED with tabix, for BAM with `.bai` and for VCF with `.tbi`. Random access needs sorted data, block compression and an index built from that exact file. <!-- src: PLAN L05 §3; found §4.5 -->
+The same trade-off returns for BED with tabix, BAM with `.bai` and VCF with `.tbi`: region queries need sorted data, BGZF and an index built from that exact file. <!-- src: PLAN L05 §3; found §4.5 -->
 
 :::read-more{title="Random access over HTTP"}
 
@@ -115,7 +115,7 @@ This course's chr2 slices were fetched this way. Read chr2's row in the Broad `.
 
 - **Five numbers find any base.** OFFSET, LINEBASES and LINEWIDTH turn a position into a byte.
 - **Rebuild the index after any edit.** A stale `.fai` returns wrong bytes silently.
-- **gzip is a scroll; BGZF is bound volumes, and the last volume says "the end".**
+- **gzip is a scroll; BGZF is bound volumes.** An index opens one block alone, and the EOF block marks the end.
 
 :::
 
@@ -135,4 +135,4 @@ This course's chr2 slices were fetched this way. Read chr2's row in the Broad `.
 
 :::
 
-Next: the reads, and how sure the sequencer was of each base.
+Next: [the reads, and how sure the sequencer was](#/lesson/fastq-reads).

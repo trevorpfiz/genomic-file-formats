@@ -10,10 +10,15 @@
 // - without storage, or after a failed write, it keeps state in memory and says so
 //   (`persistent` is false), and the shell shows the notice and "Progress not saved".
 //
-// Cards read and write exercise records through ProgressStore; the quiz page through the
-// optional getQuiz/putQuiz methods (src/widgets/quiz-progress.ts).
-import type { QuizProgressStore } from "../widgets/quiz-progress.ts";
-import { emptyState, mergeExerciseProgress, mergeProgressState, parseProgress } from "./progress-merge.ts";
+// Cards read and write exercise records through ProgressStore, and the quiz page quiz records
+// (getQuiz/putQuiz).
+import {
+  emptyState,
+  mergeExerciseProgress,
+  mergeProgressState,
+  mergeQuizProgress,
+  parseProgress,
+} from "./progress-merge.ts";
 import {
   PROGRESS_KEY,
   type ExerciseProgress,
@@ -22,7 +27,6 @@ import {
   type ProgressStore,
   type QuizProgress,
 } from "./progress-types.ts";
-import { mergeQuizProgress } from "../widgets/quiz-progress.ts";
 import { readItem, writeItem, type StorageLike } from "./storage.ts";
 
 /** Where an unreadable stored value is copied before the first write replaces it. */
@@ -44,7 +48,7 @@ export interface CourseStoreOptions {
 /** The lesson an exercise belongs to: exercise ids start with "<lesson-id>/" (D-22). */
 export const lessonIdOf = (exerciseId: string): string => exerciseId.split("/")[0] ?? exerciseId;
 
-export class CourseStore implements ProgressStore, QuizProgressStore {
+export class CourseStore implements ProgressStore {
   #state: ProgressState;
   #storage: StorageLike | null;
   #reason: MemoryReason | null = null;
@@ -137,13 +141,18 @@ export class CourseStore implements ProgressStore, QuizProgressStore {
    */
   importState(imported: ProgressState, mode: "merge" | "replace" = "merge"): void {
     const now = this.#now();
-    if (mode === "replace") {
-      this.#state = { ...imported, prefs: this.#state.prefs, updatedAt: now };
-      this.#write(this.#state);
-    } else {
-      this.#state = { ...mergeProgressState(this.#state, imported), updatedAt: now };
-      this.flush();
-    }
+    // A progress code carries neither preferences nor the badge name (progress-code.ts), so
+    // both stay as they are here, whichever state is newer and in either mode.
+    const keep = { prefs: this.#state.prefs, name: this.#state.badge.name };
+    const next = mode === "replace" ? { ...imported } : { ...mergeProgressState(this.#state, imported) };
+    this.#state = {
+      ...next,
+      prefs: keep.prefs,
+      badge: { ...next.badge, name: keep.name },
+      updatedAt: now,
+    };
+    if (mode === "replace") this.#write(this.#state);
+    else this.flush();
     this.#emit();
   }
 

@@ -282,15 +282,21 @@ export function TextViewBlock({ view, caption, id }: { view: TextView; caption: 
   );
 }
 
-/** Preset chips (docs/PLAN.md 7.5: real case values). */
+/**
+ * Preset chips (docs/PLAN.md 7.5: real case values). When the presets select a file (`isCurrent`
+ * given), each chip is a toggle button whose `aria-pressed` marks the file in use, drawn with
+ * the toolbar toggles' pressed style (accent border and fill), so the state is not colour alone.
+ */
 export function Presets({
   presets,
   onPick,
   label = "Presets",
+  isCurrent,
 }: {
   presets: readonly { label: string; state: Record<string, unknown> }[] | undefined;
   onPick: (state: Record<string, unknown>, label: string) => void;
   label?: string;
+  isCurrent?: (state: Record<string, unknown>) => boolean;
 }) {
   if (!presets?.length) return null;
   return (
@@ -299,7 +305,13 @@ export function Presets({
         {label}
       </span>
       {presets.map((p) => (
-        <button key={p.label} type="button" class="sim-chip" onClick={() => onPick(p.state, p.label)}>
+        <button
+          key={p.label}
+          type="button"
+          class="sim-chip"
+          aria-pressed={isCurrent ? isCurrent(p.state) : undefined}
+          onClick={() => onPick(p.state, p.label)}
+        >
           <Marked text={p.label} />
         </button>
       ))}

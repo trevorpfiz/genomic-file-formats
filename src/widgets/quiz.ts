@@ -27,7 +27,6 @@ import type { QuizAttempt, QuizProgress } from "../shell/progress-types.ts";
 import { getProgressStore, type ExerciseCard } from "./card.ts";
 import { button, el } from "./dom.ts";
 import { inlineNodes } from "./inline.ts";
-import { mergeQuizProgress, type QuizProgressStore } from "./quiz-progress.ts";
 import "./mcq.ts";
 import "./predict.ts";
 import "./sort.ts";
@@ -128,18 +127,10 @@ export function shuffleVariant(variant: QuizVariant, rng: Rng): QuizVariant {
 // ---------------------------------------------------------------------------------------------
 // Records
 
-const fallback = new Map<string, QuizProgress>();
+const readRecord = (section: string): QuizProgress | undefined => getProgressStore().getQuiz(section);
 
-function readRecord(section: string): QuizProgress | undefined {
-  const store = getProgressStore() as QuizProgressStore;
-  return store.getQuiz ? store.getQuiz(section) : fallback.get(section);
-}
-
-function writeRecord(section: string, record: QuizProgress): void {
-  const store = getProgressStore() as QuizProgressStore;
-  if (store.putQuiz) store.putQuiz(section, record);
-  else fallback.set(section, mergeQuizProgress(fallback.get(section), record));
-}
+const writeRecord = (section: string, record: QuizProgress): void =>
+  getProgressStore().putQuiz(section, record);
 
 // ---------------------------------------------------------------------------------------------
 // Heading text for "Review:" links
@@ -167,6 +158,12 @@ function reviewLink(doc: Document, tests: string): HTMLAnchorElement {
   link.textContent = `Review: ${heading}${lesson ? ` (${lesson})` : ""}`;
   return link;
 }
+
+/**
+ * The heading a drawn question tests: the variant's own `tests` when it names one (a variant
+ * that tests another heading than its slot's), else the slot's.
+ */
+const testsOf = (q: { slot: QuizSlot; variant: QuizVariant }): string => q.variant.tests ?? q.slot.tests;
 
 // ---------------------------------------------------------------------------------------------
 // The element
@@ -260,7 +257,9 @@ export class QuizElement extends HTMLElement {
     details.open = true;
     const summary = el(doc, "summary", "quiz-reference-summary");
     summary.innerHTML = icon("book-open");
-    summary.append(" ", el(doc, "span", "", card.title));
+    const chevron = el(doc, "span", "quiz-reference-chevron");
+    chevron.innerHTML = icon("chevron-down");
+    summary.append(el(doc, "span", "", card.title), chevron);
     details.append(summary);
     const body = el(doc, "div", "quiz-reference-body");
     for (const item of card.items) body.append(this.#referenceItem(item));
@@ -545,7 +544,7 @@ export class QuizElement extends HTMLElement {
           q.host.scrollIntoView?.({ block: "start" });
           q.host.querySelector<HTMLElement>(".exercise-title")?.focus();
         });
-        li.append(jump, ": ", reviewLink(doc, q.slot.tests));
+        li.append(jump, ": ", reviewLink(doc, testsOf(q)));
         list.append(li);
       }
       panel.append(list);

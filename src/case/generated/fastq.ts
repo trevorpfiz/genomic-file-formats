@@ -56,7 +56,7 @@ export interface CaseFragment {
 export const QUALITY_BINS = { "#": 2, ",": 11, ":": 25, F: 37 } as const;
 
 export const CASE_FRAGMENTS: readonly CaseFragment[] = [
-  { sample: "P042-proband", id: "A00123:8:H7KJ2DSXY:1:1203:15410:22045", chrom: "chr2", start: 166041251, end: 166041560, strand: "+", haplotype: "F2", covers: "rs6432860", exon: 16 },
+  { sample: "P042-proband", id: "A00123:8:H7KJ2DSXY:1:1203:14762:20318", chrom: "chr2", start: 166041251, end: 166041560, strand: "+", haplotype: "F2", covers: "rs6432860", exon: 16 },
   { sample: "P042-proband", id: "A00123:8:H7KJ2DSXY:1:1203:16234:4711", chrom: "chr2", start: 166036151, end: 166036440, strand: "-", haplotype: "M1", covers: "rs2298771", exon: 19 },
   { sample: "P042-mother", id: "A00123:8:H7KJ2DSXY:1:1104:8711:30139", chrom: "chr2", start: 166041181, end: 166041490, strand: "-", haplotype: "M1", covers: "rs6432860", exon: 16 },
   { sample: "P042-mother", id: "A00123:8:H7KJ2DSXY:1:1104:20546:12382", chrom: "chr2", start: 166036171, end: 166036500, strand: "+", haplotype: "M2", covers: "rs2298771", exon: 19 },
@@ -72,7 +72,7 @@ export const CASE_FASTQ_FILES: readonly CaseFastqFile[] = [
     read: 1,
     records: [
       {
-        id: "A00123:8:H7KJ2DSXY:1:1203:15410:22045",
+        id: "A00123:8:H7KJ2DSXY:1:1203:14762:20318",
         comment: "1:N:0:ACGTACGT+TGCATGCA",
         sequence:
           "CATTATTGAAATGGTCCGTCATTGGATAGTGCTCCATGGCCATGAAAAGAGTATTTAAGACAATACAGATGGTGATGGCCAGGTCAACAAATGGGTCCATCACGACCAGGTTGACAACATGTTTCACTTTTAACCAATATGGAGAACAGT",
@@ -95,7 +95,7 @@ export const CASE_FASTQ_FILES: readonly CaseFastqFile[] = [
     read: 2,
     records: [
       {
-        id: "A00123:8:H7KJ2DSXY:1:1203:15410:22045",
+        id: "A00123:8:H7KJ2DSXY:1:1203:14762:20318",
         comment: "2:N:0:ACGTACGT+TGCATGCA",
         sequence:
           "TTACTGAAAATAAGTTTAGTGGATATGAAATAAATGTGTGTGTATAAAGTATACCTTTTGGTGGTTCTTTTTTTTTTTTTTCTTAATCTAGAACTTGAAGAATCCAGGCAGAAATGCCCACCCTGTTGGTATAAATTTTCCAACATATTC",

@@ -66,7 +66,7 @@ export const FASTQ_RULES = defineRules({
     runtime: false,
     summary: "A FASTQ file is not truncated: its last record is complete.",
     spec: "Cock et al. 2010",
-    toolsSay: "htslib 1.24 reports `File truncated`; a gzipped copy also fails `gzip -t`.",
+    toolsSay: "htslib 1.24 reports `File truncated`; `gzip -t` fails only if the compressed bytes were cut.",
   },
   "FQ-M01": {
     format: "fastq",

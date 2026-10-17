@@ -95,13 +95,8 @@ describe.each([FIND_THE_BYTE, BGZF_DEMO, QUALITY_AS_PROBABILITY] as SimulatorExe
 );
 
 describe("models.ts", () => {
-  test("registers the three M1 simulators and the ruler", () => {
-    expect(Object.keys(models).sort()).toEqual([
-      "bgzf-demo",
-      "coordinate-ruler",
-      "fai-calculator",
-      "phred-converter",
-    ]);
+  test("registers the three M1 simulators (the M0 ruler placeholder is gone until M3)", () => {
+    expect(Object.keys(models).sort()).toEqual(["bgzf-demo", "fai-calculator", "phred-converter"]);
   });
 });
 

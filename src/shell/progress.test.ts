@@ -1,7 +1,8 @@
 // Progress: the monotonic merges (D-36), the store's merge-on-write, storage events and memory
 // fallback (docs/PLAN.md 11.4, D-29), and the progress code (D-23).
-import { describe, expect, test } from "vite-plus/test";
+import { describe, expect, test, vi } from "vite-plus/test";
 import {
+  canCompress,
   crc32,
   decodeProgress,
   encodeProgress,
@@ -309,6 +310,28 @@ describe("the store", () => {
   });
 });
 
+describe("importing a progress code", () => {
+  test("keeps this browser's preferences and badge name, which a code does not carry", () => {
+    const storage = new MemoryStorage();
+    const local = state((s) => {
+      s.badge.name = "Noa Learner";
+      s.prefs.whitespace = true;
+    }, T1);
+    storage.setItem(PROGRESS_KEY, JSON.stringify(local));
+    const { store } = makeStore(storage, () => T3);
+    // The code is newer than the local state, as when progress moves between copies.
+    const code = unproject(
+      project(state((s) => (s.lessons.x = { exercises: { "x/a": ex("correct") } }), T2)),
+    );
+    for (const mode of ["merge", "replace"] as const) {
+      store.importState(code, mode);
+      expect(store.state.badge.name, mode).toBe("Noa Learner");
+      expect(store.state.prefs.whitespace, mode).toBe(true);
+      expect(store.getExercise("x/a")?.state, mode).toBe("correct");
+    }
+  });
+});
+
 describe("the progress code (D-23)", () => {
   test("CRC-32 matches the standard check value", () => {
     expect(crc32(new TextEncoder().encode("123456789")).toString(16)).toBe("cbf43926");
@@ -376,6 +399,27 @@ describe("the progress code (D-23)", () => {
     await expect(decodeProgress(`GF2U.${payload}.${crc}`)).rejects.toMatchObject({ reason: "version" });
     const compressed = await encodeProgress(sample, { compress: true });
     await expect(decodeProgress(compressed.slice(0, -1) + "0")).rejects.toMatchObject({ reason: "checksum" });
+  });
+
+  test("a browser whose streams lack deflate-raw writes GF1U codes and reads GF1Z as unsupported", async () => {
+    const compressed = await encodeProgress(sample, { compress: true });
+    class NoDeflateRaw {
+      constructor(format: string) {
+        if (format === "deflate-raw") throw new TypeError(`Unsupported compression format: ${format}`);
+      }
+    }
+    vi.stubGlobal("CompressionStream", NoDeflateRaw);
+    vi.stubGlobal("DecompressionStream", NoDeflateRaw);
+    try {
+      expect(canCompress()).toBe(false);
+      const code = await encodeProgress(sample);
+      expect(code).toMatch(/^GF1U\./);
+      expect(project(await decodeProgress(code))).toEqual(project(sample));
+      await expect(decodeProgress(compressed)).rejects.toMatchObject({ reason: "unsupported" });
+    } finally {
+      vi.unstubAllGlobals();
+    }
+    expect(canCompress()).toBe(true);
   });
 
   test("imported records merge without overriding newer incomplete work on this device", () => {

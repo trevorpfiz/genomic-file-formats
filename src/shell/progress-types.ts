@@ -128,6 +128,10 @@ export interface ProgressStore {
   getExercise(id: ExerciseId): ExerciseProgress | undefined;
   /** Merge a record into the store (never a plain overwrite: correct and revealed never revert). */
   putExercise(id: ExerciseId, record: ExerciseProgress): void;
+  /** The stored record for a section's quiz, if any. */
+  getQuiz(section: string): QuizProgress | undefined;
+  /** Merge a quiz record into the store (mergeQuizProgress: best kept, "Passed" permanent). */
+  putQuiz(section: string, record: QuizProgress): void;
 }
 
 // Derived values (never stored, docs/PLAN.md 11.4, D-10):

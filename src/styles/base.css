@@ -508,17 +508,20 @@ fieldset {
   background: var(--error-bg);
 }
 
+/* One flowing sentence: the icon sits inline, so the verdict word never wraps on its own
+   ("Not / quite.") and inline code in the message stays in the text. */
 .card-verdict {
-  display: flex;
-  align-items: baseline;
-  gap: var(--s-2);
+  display: block;
   margin: 0;
   color: var(--text);
 }
 
-.card-verdict svg {
-  flex: none;
-  align-self: center;
+.card-verdict > svg {
+  margin-right: 0.15em;
+}
+
+.card-verdict > strong {
+  white-space: nowrap;
 }
 
 .card-explanation {

@@ -17,7 +17,10 @@
 // Tab inserts a TAB; Esc then Tab leaves the editor (stated in the how-to line, WCAG 2.1.2);
 // "Insert tab" serves touch keyboards. Validation is debounced at 250 ms and uses runtime rules
 // only (src/validators/runtime); input is capped at the validators' snippet scope. Live
-// validation never moves focus and is announced only when the text first becomes valid.
+// validation never moves focus. It is announced when the text becomes valid and whenever the
+// valid text's summary changes (a warning or an unmet goal), never "No problems found." while a
+// warning remains. The pill and the Problems heading count errors as problems and warnings as
+// warnings, in the same words.
 import type { Diagnostic } from "../validators/types.ts";
 import type { FixItExercise } from "../exercises/types.ts";
 import { FORMAT_NAMES } from "../formats/names.ts";
@@ -124,7 +127,8 @@ export class FixItElement extends HTMLElement {
   #result: Result = { capped: false, diagnostics: [], goals: [] };
   #timer: ReturnType<typeof setTimeout> | undefined;
   #announceTimer: ReturnType<typeof setTimeout> | undefined;
-  #wasValid = false;
+  /** The last validity summary announced; "" while the text is invalid. */
+  #announced = "";
   #escArmed = false;
   #hasValidator = false;
 
@@ -146,7 +150,7 @@ export class FixItElement extends HTMLElement {
           reset: () => {
             this.#setText(exercise.starter.text ?? "");
             this.#diff.hidden = true;
-            this.#wasValid = false;
+            this.#announced = "";
           },
           restore: (record) => {
             if (typeof record.answer === "string") this.#setText(record.answer);
@@ -312,13 +316,25 @@ export class FixItElement extends HTMLElement {
     this.#draw();
     this.#renderPanels();
     const valid = !capped && !diagnostics.some((d) => d.severity === "error");
-    if (live && valid && !this.#wasValid) {
+    const summary = valid ? this.#validSummary() : "";
+    if (live && valid && summary !== this.#announced) {
       clearTimeout(this.#announceTimer);
-      this.#announceTimer = setTimeout(() => this.card?.announce("No problems found."), ANNOUNCE_MS);
+      this.#announceTimer = setTimeout(() => this.card?.announce(summary), ANNOUNCE_MS);
     }
     if (!valid) clearTimeout(this.#announceTimer);
-    this.#wasValid = valid;
+    this.#announced = summary;
     return this.#result;
+  }
+
+  /** What live validation announces for valid text: warnings and unmet goals included. */
+  #validSummary(): string {
+    const { diagnostics, goals } = this.#result;
+    const format = FORMAT_NAMES[this.#exercise.validation.format];
+    const head = diagnostics.length
+      ? `Valid ${format}, ${plural(diagnostics.length, "warning")}.`
+      : "No problems found.";
+    const unmet = goals.filter((g) => !g.passed).length;
+    return unmet ? `${head} ${plural(unmet, "goal")} not met.` : head;
   }
 
   /** Redraw the overlay and gutter for the current text with the last validation's marks. */
@@ -402,7 +418,11 @@ export class FixItElement extends HTMLElement {
     if (capped) pill = { text: "Too long to check", icon: "info", tone: "neutral" };
     else if (!this.#hasValidator) pill = { text: "No live checks", icon: "info", tone: "neutral" };
     else if (errors.length)
-      pill = { text: plural(errors.length, "problem"), icon: "circle-x", tone: "error" };
+      pill = {
+        text: `${plural(errors.length, "problem")}${warnings.length ? `, ${plural(warnings.length, "warning")}` : ""}`,
+        icon: "circle-x",
+        tone: "error",
+      };
     else if (warnings.length)
       pill = {
         text: `Valid ${format}, ${plural(warnings.length, "warning")}`,
@@ -418,7 +438,12 @@ export class FixItElement extends HTMLElement {
     this.#notice.textContent = capped
       ? CAP_MESSAGE
       : "Live checks are not available for this format; Check compares your text with a model answer.";
-    this.#problemsTitle.textContent = diagnostics.length ? `Problems (${diagnostics.length})` : "Problems";
+    // The same words as the pill: errors are problems, warnings are warnings.
+    const counts = [
+      ...(errors.length || !warnings.length ? [`Problems${errors.length ? ` (${errors.length})` : ""}`] : []),
+      ...(warnings.length ? [`Warnings (${warnings.length})`] : []),
+    ];
+    this.#problemsTitle.textContent = counts.join(" · ");
     const items = diagnostics.map((d) => {
       const li = el(doc, "li", "fixit-problem");
       li.dataset.severity = d.severity === "error" ? "error" : "warning";

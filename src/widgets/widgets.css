@@ -145,12 +145,21 @@ select[disabled] {
   margin-left: auto;
 }
 
+/* The line-number column's width, computed where it is declared (in the snippet font), so the
+   sticky description column, in a smaller sans font, can start right after it. */
+@property --snippet-ln-w {
+  syntax: "<length>";
+  inherits: true;
+  initial-value: 0px;
+}
+
 .snippet-body {
+  --snippet-ln-w: calc(4ch + var(--s-2) + 1px);
   /* Notes size themselves to the visible width (cqi), not to the scrolled lines. */
   container-type: inline-size;
   overflow-x: auto;
   /* Focusing a cell scrolls it clear of the sticky line numbers (.snippet-ln), not under them. */
-  scroll-padding-inline-start: calc(5ch + var(--s-2) + 1px);
+  scroll-padding-inline-start: var(--snippet-ln-w);
   color: var(--text-body);
   font-family: var(--font-mono);
   font-size: var(--fs-snippet);
@@ -180,7 +189,7 @@ select[disabled] {
   left: 0;
   z-index: 1;
   flex: none;
-  min-width: 4ch;
+  width: var(--snippet-ln-w);
   padding: 0 1ch 0 var(--s-2);
   border-right: 1px solid var(--border);
   background: var(--raised);
@@ -189,10 +198,14 @@ select[disabled] {
   user-select: none;
 }
 
+/* Every description in a viewer has one width (text-viewer.ts sets --snippet-info-chars to the
+   longest), so each line's text starts at the same x and lengths compare by eye. Descriptions
+   are mostly digits and lowercase, measured at up to 0.79ch per character in Public Sans, so
+   0.86ch leaves room. From 600 px the column stays in view while the lines scroll sideways. */
 .snippet-info {
   display: none;
   flex: none;
-  min-width: 24ch;
+  width: calc(var(--snippet-info-chars, 22) * 0.86ch + 2ch + 1px);
   padding: 0 1ch;
   border-right: 1px solid var(--border);
   background: var(--sunken);
@@ -205,6 +218,14 @@ select[disabled] {
 
 [data-lineinfo="on"] .snippet-info {
   display: block;
+}
+
+@media (min-width: 600px) {
+  .snippet-info {
+    position: sticky;
+    left: var(--snippet-ln-w);
+    z-index: 1;
+  }
 }
 
 .snippet-text {
@@ -1285,8 +1306,18 @@ button.fixit-goto {
 /* --- sort (ux 8.8) -------------------------------------------------------------------------- */
 
 .sort {
+  container: sort / inline-size;
   display: grid;
   gap: var(--s-4);
+}
+
+/* A wide card lays the Unsorted pool out in two columns, so a pool of snippet excerpts stays
+   short enough for an item and the bins to share the screen (L07 has eight files). */
+@container sort (min-width: 40rem) {
+  .sort-pool .sort-list {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    align-items: start;
+  }
 }
 
 .sort-bins {
@@ -1729,13 +1760,26 @@ button.sort-handle[aria-disabled="true"] {
   margin-top: var(--s-5);
 }
 
-.exercise-card.follow-up {
+/* A simulator's predict gate (simulator.tsx) is an embedded card like a follow-up. */
+.exercise-card.follow-up,
+.exercise-card.sim-gate {
   margin: 0;
   padding: var(--s-4);
   border: 1px solid var(--border);
   border-left: 3px solid var(--accent);
   border-radius: var(--r-control);
   background: var(--raised);
+}
+
+.exercise-card.sim-gate + .sim-gate-note,
+.exercise-card.sim-gate + .sim-gate-note + .island {
+  margin-top: var(--s-4);
+}
+
+.sim-gate-note {
+  margin-bottom: 0;
+  color: var(--text-muted);
+  font-size: var(--fs-ui);
 }
 
 /* --- Quiz page (ux 9.1-9.2) ----------------------------------------------------------------- */
@@ -1762,10 +1806,35 @@ button.sort-handle[aria-disabled="true"] {
   background: var(--surface);
 }
 
+/* Styled like a READ MORE summary row (prose.css .disclosure-summary): no browser triangle, a
+   chevron that turns when open, and a 44px row. */
 .quiz-reference-summary {
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+  min-height: 2.75rem;
   color: var(--text);
   font-weight: 600;
   cursor: pointer;
+  list-style: none;
+}
+
+.quiz-reference-summary::-webkit-details-marker {
+  display: none;
+}
+
+.quiz-reference-summary::marker {
+  content: "";
+}
+
+.quiz-reference-summary .quiz-reference-chevron {
+  margin-left: auto;
+  color: var(--text-muted);
+  transition: transform var(--dur-2) var(--ease);
+}
+
+.quiz-reference[open] > .quiz-reference-summary .quiz-reference-chevron {
+  transform: rotate(180deg);
 }
 
 .quiz-reference-body {
@@ -1779,26 +1848,47 @@ button.sort-handle[aria-disabled="true"] {
   margin: 0;
 }
 
-.quiz-reference-table {
+/* --- Data tables in widgets: simulator text views and the quiz Reference card ------------- */
+/* They sit in a bordered .table-scroll region: the caption is a padded header row, every cell
+   has inline padding, and the column heads sit on --sunken, as in lesson tables. */
+
+:is(.sim-text-view, .quiz-reference-body) table {
+  width: 100%;
+  margin: 0;
   border-collapse: collapse;
   font-size: var(--fs-meta);
+  line-height: 1.45;
+  font-variant-numeric: tabular-nums;
 }
 
-.quiz-reference-table caption {
-  padding-bottom: var(--s-1);
+:is(.sim-text-view, .quiz-reference-body) caption {
+  padding: var(--s-2) var(--s-3);
+  border-bottom: 1px solid var(--border);
   color: var(--text-muted);
+  font-weight: 600;
   text-align: left;
 }
 
-.quiz-reference-table th,
-.quiz-reference-table td {
-  padding: 0.2rem 0.6rem;
-  border: 1px solid var(--border);
+:is(.sim-text-view, .quiz-reference-body) :is(th, td) {
+  padding: var(--s-1) var(--s-3);
+  border: 0;
+  border-bottom: 1px solid var(--border);
   text-align: left;
+  vertical-align: top;
 }
 
-.quiz-reference-table thead th {
+:is(.sim-text-view, .quiz-reference-body) thead th {
   background: var(--sunken);
+  color: var(--text);
+  font-weight: 600;
+}
+
+:is(.sim-text-view, .quiz-reference-body) tbody tr:last-child > * {
+  border-bottom: 0;
+}
+
+.quiz-reference-body .table-scroll {
+  margin: 0;
 }
 
 .quiz-formula-label {
@@ -1932,7 +2022,8 @@ h2.quiz-results-title {
   .sort-zone[data-drop],
   .mcq-option[data-selected],
   .chip-option:has(input:checked),
-  button.button-toggle[aria-pressed="true"] {
+  button.button-toggle[aria-pressed="true"],
+  button.sim-chip[aria-pressed="true"] {
     outline: 2px solid Highlight;
   }
   .sort-ghost {
@@ -1950,18 +2041,13 @@ h2.quiz-results-title {
   overflow-x: auto;
 }
 
+/* Drawn at its width and height attributes (1.25 or 1.4 times the viewBox, so labels render at
+   15px or more), and scaled down only when the column is narrower. */
 .pipeline-map-svg {
   display: block;
-  width: 100%;
-  max-width: 48rem;
+  max-width: 100%;
   height: auto;
   margin: 0 auto;
-}
-
-@media (max-width: 599px) {
-  .pipeline-map-svg {
-    max-width: 22rem;
-  }
 }
 
 .pm-node rect {
@@ -2007,12 +2093,26 @@ h2.quiz-results-title {
   fill: var(--border-strong);
 }
 
+/* Two columns from 600 px. Items are spaced with padding, not margins: a column break drops the
+   margin of the item it starts with, which made the second column start higher than the first.
+   The gap leaves room for the second column's wider markers (10., 11.). */
 .pipeline-map-list {
   margin: var(--s-3) 0 0;
   padding-left: var(--s-6);
   color: var(--text-muted);
   font-size: var(--fs-meta);
-  columns: 2 18rem;
+}
+
+@media (min-width: 600px) {
+  .pipeline-map-list {
+    columns: 2;
+    column-gap: var(--s-8);
+  }
+}
+
+.pipeline-map-list > li {
+  padding: 0.2em 0;
+  break-inside: avoid;
 }
 
 .pipeline-map-list li[data-current] {

@@ -5,6 +5,7 @@ import { describe, expect, test } from "vite-plus/test";
 import { exercisePill, pager, statusLine } from "./chrome.ts";
 import { buildModel, type ShellPage } from "./course-model.ts";
 import { emptyState } from "./progress-merge.ts";
+import { setTheme, themeMenu, themeRadios, trackedThemeControls } from "./theme.ts";
 
 const widget = (ref: string, mode: "try-it" | "quick-check" | "optional") => ({
   directive: "mcq",
@@ -66,5 +67,24 @@ describe("lesson chrome", () => {
     const first = pager(model, fasta)!;
     expect(first.querySelector("a[rel=prev]")).toBeNull();
     expect(first.querySelector(".pager-spacer")).not.toBeNull();
+  });
+});
+
+describe("theme controls", () => {
+  test("rebuilding them on every route keeps one per placement, and the live ones follow", () => {
+    const aside = document.createElement("div");
+    const top = document.createElement("div");
+    document.body.append(aside, top);
+    for (let i = 0; i < 20; i += 1) {
+      aside.replaceChildren(themeMenu("aside-theme", "aside"), themeRadios("home-theme"));
+      top.replaceChildren(themeMenu("topbar-theme", "icon"));
+    }
+    expect(trackedThemeControls()).toBe(3);
+    setTheme("dark", false);
+    expect(aside.querySelector<HTMLInputElement>('input[value="dark"]')?.checked).toBe(true);
+    expect(top.querySelector("button")?.getAttribute("aria-label")).toBe("Theme: Dark");
+    setTheme("system", false);
+    aside.remove();
+    top.remove();
   });
 });
