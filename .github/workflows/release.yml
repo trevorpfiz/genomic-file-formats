@@ -1,6 +1,7 @@
-# Release (docs/PLAN.md 11.7, D-33): on a vX.Y.Z tag, build once through ci.yml, then attach
-# that file to a GitHub Release and deploy the same bytes to Pages. A manual run is a dry run:
-# it builds and names the release files but publishes nothing.
+# Release (docs/PLAN.md 11.7, D-33): on a vX.Y.Z tag, build once through ci.yml (without e2e,
+# which already ran on main), then attach that file to a GitHub Release and deploy the same
+# bytes to Pages. A manual run is a dry run: it builds and names the release files but
+# publishes nothing.
 name: Release
 
 on:
@@ -37,6 +38,8 @@ jobs:
     name: CI
     needs: tag
     uses: ./.github/workflows/ci.yml
+    with:
+      e2e: false
     permissions:
       contents: read
 

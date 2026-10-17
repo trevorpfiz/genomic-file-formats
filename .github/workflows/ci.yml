@@ -1,6 +1,7 @@
 # CI (docs/PLAN.md 11.7): check, test, build once, assert the single file and upload the
-# course-html artifact; then e2e on all three engines over file:// against that same file.
-# release.yml calls this workflow and publishes the artifact from the build job.
+# course-html artifact; then e2e over file:// against that same file. While the course is in
+# early iteration, e2e runs Chromium only; a manual run with all-browsers adds Firefox and WebKit.
+# release.yml calls this workflow with e2e: false and publishes the artifact from the build job.
 name: CI
 
 on:
@@ -8,14 +9,24 @@ on:
   push:
     branches: [main]
   workflow_call:
+    inputs:
+      e2e:
+        type: boolean
+        default: true
   workflow_dispatch:
+    inputs:
+      all-browsers:
+        description: Run e2e on Firefox and WebKit too
+        type: boolean
+        default: false
 
 permissions:
   contents: read
 
 concurrency:
   group: ci-${{ github.ref }}
-  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+  # A newer push to the same ref supersedes the run in flight instead of queueing behind it.
+  cancel-in-progress: true
 
 jobs:
   actionlint:
@@ -75,20 +86,20 @@ jobs:
           if-no-files-found: error
           retention-days: 14
 
-  # E2E runs on every push and pull request and reports its failures, but does not block
-  # merges or releases while the known engine-specific failures are open: phone-width overflow
-  # at 360 px in CI's Chromium and WebKit (lessons 6 and 7), and the keyboard-only walk timing
-  # out in Firefox. Remove continue-on-error once those are fixed.
+  # E2E reports its failures but does not block merges while the known failures are open:
+  # phone-width overflow at 360 px in CI's Chromium and WebKit (lessons 6 and 7), and the
+  # keyboard-only walk timing out in Firefox. Remove continue-on-error once those are fixed.
   e2e:
     name: E2E (${{ matrix.browser }})
     needs: build
+    if: inputs.e2e != false
     runs-on: ubuntu-24.04
-    timeout-minutes: 30
+    timeout-minutes: 10
     continue-on-error: true
     strategy:
       fail-fast: false
       matrix:
-        browser: [chromium, firefox, webkit]
+        browser: ${{ fromJSON(inputs.all-browsers && '["chromium","firefox","webkit"]' || '["chromium"]') }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
