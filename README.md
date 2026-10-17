@@ -6,7 +6,7 @@ Learners build an intuition for genomic data from the ground up, learn to recogn
 
 The course ships as a single self-contained HTML file: open it from disk, email it, or use the hosted copy.
 
-**Status:** M0, repository bootstrap. The course plan is [`docs/PLAN.md`](docs/PLAN.md), and the research notes behind it live in [`docs/research/`](docs/research/).
+**Status:** M1 in progress (vertical slice: the shell, the design system and Section 2). The course plan is [`docs/PLAN.md`](docs/PLAN.md), the research notes behind it live in [`docs/research/`](docs/research/), and the developer contract is [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
 
 ## Develop
 

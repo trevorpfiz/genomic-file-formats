@@ -1,0 +1,986 @@
+/* The reading layout (ux-design.md 4; docs/PLAN.md 10.1-10.2, 10.4): breadcrumb, serif title,
+   meta pills, the prose measure, headings, lists, tables, code blocks with Copy, callouts,
+   READ MORE / SPEC DETAIL / WHY IT MATTERS disclosures, Recap and At-a-glance cards, the
+   lesson status line, previous/next cards, and the home, About and badge pages. Class names
+   come from the lesson compiler (docs/ARCHITECTURE.md 4) and src/shell/. */
+
+/* --- Breadcrumb (ux 4.1) ------------------------------------------------------------------- */
+
+.breadcrumb ol {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0 var(--s-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  color: var(--text-muted);
+  font-size: var(--fs-ui);
+  line-height: var(--lh-ui);
+}
+
+.breadcrumb li {
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+  min-width: 0;
+}
+
+.breadcrumb a {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s-1);
+  min-height: 1.5rem;
+  color: var(--text-muted);
+  text-decoration: none;
+}
+
+.breadcrumb a:hover {
+  color: var(--text);
+  text-decoration: underline;
+}
+
+.breadcrumb-sep {
+  color: var(--border-strong);
+}
+
+@media (max-width: 479px) {
+  .breadcrumb li:last-child a {
+    display: block;
+    max-width: 14rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+}
+
+/* --- Title and meta pills (ux 4.2-4.3) ----------------------------------------------------- */
+
+.page > h1,
+.page h1#page-title {
+  margin: var(--s-3) 0 var(--s-4);
+  font-size: var(--fs-h1);
+  line-height: var(--lh-h1);
+  letter-spacing: -0.015em;
+}
+
+.page > h1:first-child {
+  margin-top: 0;
+}
+
+@media (max-width: 767px) {
+  .page > h1,
+  .page h1#page-title {
+    font-size: var(--fs-h1-sm);
+    line-height: 1.12;
+  }
+}
+
+.meta-pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-2);
+  margin: 0 0 var(--s-7);
+  padding: 0;
+  list-style: none;
+}
+
+.pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 28px;
+  padding: 0 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-pill);
+  background: var(--sunken);
+  color: var(--text-muted);
+  font-size: var(--fs-meta);
+  font-weight: 500;
+  line-height: 1.2;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.pill .gf-icon {
+  width: 14px;
+  height: 14px;
+}
+
+.pill[data-tone="success"],
+.pill-passed {
+  border-color: color-mix(in srgb, var(--success) 40%, transparent);
+  background: var(--success-bg);
+  color: var(--success);
+  font-weight: 600;
+}
+
+/* --- Prose (ux 4.4): one column width for everything ---------------------------------------- */
+
+.prose {
+  color: var(--text-body);
+}
+
+.prose > :first-child {
+  margin-top: 0;
+}
+
+.prose p {
+  margin: 0 0 1.1em;
+}
+
+.prose h2 {
+  margin: var(--s-10) 0 var(--s-4);
+  font-size: var(--fs-h2);
+  line-height: var(--lh-h2);
+}
+
+.prose h3 {
+  margin: 2.25rem 0 var(--s-3);
+  font-size: var(--fs-h3);
+  line-height: var(--lh-h3);
+}
+
+.prose h4 {
+  margin: var(--s-6) 0 var(--s-2);
+  font-size: 1rem;
+}
+
+@media (max-width: 767px) {
+  .prose h2 {
+    font-size: var(--fs-h2-sm);
+    line-height: 1.25;
+    margin-top: var(--s-9);
+  }
+
+  .prose h3 {
+    font-size: var(--fs-h3-sm);
+  }
+}
+
+.prose ul,
+.prose ol {
+  margin: 0 0 1.1em;
+  padding-left: 1.4em;
+}
+
+.prose li {
+  margin: 0.5em 0;
+}
+
+.prose li::marker {
+  color: var(--text-muted);
+}
+
+.prose blockquote {
+  margin: var(--s-6) 0;
+  padding: var(--s-3) var(--s-5);
+  border-left: 4px solid var(--accent);
+  border-radius: 0 var(--r-control) var(--r-control) 0;
+  background: var(--accent-subtle);
+  color: var(--text);
+  font-family: var(--font-serif);
+  font-size: 1.125em;
+  line-height: 1.5;
+}
+
+.prose blockquote > :last-child {
+  margin-bottom: 0;
+}
+
+/* External links get a small arrow (ux 4.4); internal links stay plain. */
+.prose a[href^="http"]::after {
+  content: "";
+  display: inline-block;
+  width: 0.7em;
+  height: 0.7em;
+  margin-left: 0.15em;
+  vertical-align: 0.05em;
+  background: currentColor;
+  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M7 7h10v10'/%3E%3Cpath d='M7 17 17 7'/%3E%3C/svg%3E")
+    center / contain no-repeat;
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M7 7h10v10'/%3E%3Cpath d='M7 17 17 7'/%3E%3C/svg%3E")
+    center / contain no-repeat;
+}
+
+/* Prose tables (ux 4.4): horizontal rules only, header row on --sunken, mono first column;
+   the wrapper scrolls on small screens, so the page never does (WCAG 1.4.10). */
+.table-scroll {
+  margin: var(--s-6) 0;
+  overflow-x: auto;
+  border: 1px solid var(--border);
+  border-radius: var(--r-control);
+  background: var(--raised);
+}
+
+.prose table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--fs-ui);
+  line-height: 1.45;
+  font-variant-numeric: tabular-nums;
+}
+
+.prose th,
+.prose td {
+  padding: var(--s-2) var(--s-3);
+  border-bottom: 1px solid var(--border);
+  text-align: left;
+  vertical-align: top;
+}
+
+.prose thead th {
+  background: var(--sunken);
+  color: var(--text);
+  font-weight: 600;
+}
+
+.prose tbody tr:last-child > * {
+  border-bottom: 0;
+}
+
+.prose td:first-child code {
+  white-space: nowrap;
+}
+
+.section-heading {
+  margin: var(--s-10) 0 var(--s-4);
+  font-size: var(--fs-h2);
+  line-height: var(--lh-h2);
+}
+
+/* --- Code blocks with Copy (ux 4.6) --------------------------------------------------------- */
+
+.code-block {
+  position: relative;
+  margin: var(--s-6) 0;
+  border: 1px solid var(--border);
+  border-radius: var(--r-control);
+  background: var(--raised);
+}
+
+.code-block-title {
+  margin: 0;
+  padding: var(--s-2) var(--s-4);
+  padding-right: 3.5rem;
+  border-bottom: 1px solid var(--border);
+  color: var(--text-muted);
+  font-size: 0.8125rem;
+  line-height: 1.4;
+}
+
+.code-block pre {
+  margin: 0;
+  padding: var(--s-3) var(--s-4);
+  padding-right: 3.5rem;
+  overflow-x: auto;
+  color: var(--text);
+  font-size: var(--fs-code-block);
+  line-height: 1.586; /* 14.5/23 */
+  white-space: pre;
+  tab-size: 4;
+}
+
+@media (max-width: 479px) {
+  .code-block pre {
+    font-size: 0.84375rem;
+  }
+}
+
+button.code-copy {
+  position: absolute;
+  top: var(--s-1);
+  right: var(--s-1);
+  min-width: 2rem;
+  min-height: 2rem;
+  padding: 0 var(--s-2);
+  gap: var(--s-1);
+  border-color: transparent;
+  background: var(--raised);
+  color: var(--text-muted);
+  font-size: var(--fs-meta);
+}
+
+button.code-copy:hover {
+  border-color: var(--border-strong);
+  color: var(--text);
+}
+
+button.code-copy[data-copied] {
+  color: var(--success);
+}
+
+.code-block[data-single-line]:not(:has(.code-block-title)) button.code-copy {
+  top: 50%;
+  transform: translateY(-50%);
+}
+
+.code-block:has(.code-block-title) button.code-copy {
+  top: 2px;
+}
+
+/* --- Callouts (ux 4.8): 1px border, 4px left rule, tinted fill, overline with icon ------------- */
+
+.callout {
+  margin: var(--s-6) 0;
+  padding: var(--s-4);
+  border: 1px solid var(--border);
+  border-left: 4px solid var(--border-strong);
+  border-radius: var(--r-card);
+  background: var(--surface);
+  color: var(--text);
+  font-size: 1rem;
+  line-height: 1.6;
+}
+
+.callout-label {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s-1) var(--s-2);
+  margin: 0 0 var(--s-2);
+}
+
+.callout-label-lead {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s-2);
+}
+
+.callout-overline,
+.disclosure-overline,
+.at-a-glance-title,
+.recap-overline {
+  color: var(--text-muted);
+  font-size: var(--fs-overline);
+  font-weight: 600;
+  line-height: 1.333;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.callout-label .gf-icon {
+  width: 1rem;
+  height: 1rem;
+  color: var(--text-muted);
+}
+
+.callout-title {
+  color: var(--text);
+  font-weight: 600;
+}
+
+.callout-body > :last-child {
+  margin-bottom: 0;
+}
+
+.callout-body p {
+  margin: 0 0 0.75em;
+}
+
+.callout-note {
+  border-left-color: var(--info);
+  background: var(--info-bg);
+}
+
+.callout-note .callout-label .gf-icon {
+  color: var(--info);
+}
+
+.callout-tip {
+  border-left-color: var(--accent);
+  background: var(--accent-subtle);
+}
+
+.callout-tip .callout-label .gf-icon {
+  color: var(--accent);
+}
+
+.callout-watch-out {
+  border-left-color: var(--warning);
+  background: var(--warning-bg);
+}
+
+.callout-watch-out .callout-label .gf-icon {
+  color: var(--warning);
+}
+
+.callout-from-the-spec {
+  border-left-color: var(--border-strong);
+  background: var(--surface);
+}
+
+.callout-from-the-spec .callout-body {
+  font-family: var(--font-serif);
+  font-size: 1.0625rem;
+}
+
+.callout-cite {
+  margin: var(--s-2) 0 0;
+  color: var(--text-muted);
+  font-size: var(--fs-meta);
+}
+
+.callout-case-file {
+  border-color: var(--case-border);
+  border-left-color: var(--case-border);
+  background: var(--case-bg);
+}
+
+.case-pedigree {
+  display: inline-flex;
+  margin-left: auto;
+  color: var(--text);
+}
+
+.case-pedigree svg {
+  width: 40px;
+  height: 24px;
+}
+
+.case-step {
+  margin: 0 0 var(--s-2);
+  color: var(--text-muted);
+  font-size: var(--fs-meta);
+  font-weight: 500;
+}
+
+/* --- Disclosures (ux 4.7): READ MORE, SPEC DETAIL, WHY IT MATTERS on native <details> ---------- */
+
+.disclosure {
+  margin: var(--s-6) 0;
+  border: 1px solid var(--border);
+  border-radius: var(--r-card);
+  background: var(--surface);
+  transition: border-color var(--dur-1) var(--ease);
+}
+
+.disclosure:hover {
+  border-color: var(--border-strong);
+}
+
+.disclosure-summary {
+  display: flex;
+  align-items: center;
+  gap: var(--s-4);
+  min-height: 4rem;
+  padding: var(--s-3) var(--s-4);
+  border-radius: var(--r-card);
+  cursor: pointer;
+  list-style: none;
+}
+
+.disclosure-summary::-webkit-details-marker {
+  display: none;
+}
+
+.disclosure-summary::marker {
+  content: "";
+}
+
+.disclosure-icon {
+  display: grid;
+  place-items: center;
+  width: 2rem;
+  height: 2rem;
+  padding: 0.5rem;
+  border: 1px solid var(--border);
+  border-radius: var(--r-control);
+  background: var(--raised);
+  color: var(--text-muted);
+}
+
+.disclosure-text {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.disclosure-title {
+  color: var(--text);
+  font-size: 1rem;
+  font-weight: 600;
+  line-height: 1.4;
+}
+
+.disclosure-chevron {
+  color: var(--text-muted);
+  transition: transform var(--dur-2) var(--ease);
+}
+
+.disclosure[open] > .disclosure-summary .disclosure-chevron {
+  transform: rotate(180deg);
+}
+
+.disclosure-body {
+  padding: 0 var(--s-5) var(--s-5) 4rem;
+  font-size: 1.03125rem;
+  line-height: 1.6;
+}
+
+.disclosure-body > :last-child {
+  margin-bottom: 0;
+}
+
+@media (max-width: 479px) {
+  .disclosure-body {
+    padding-left: var(--s-4);
+  }
+}
+
+/* --- Recap, At a glance, To be verified (ux 4.11) -------------------------------------------- */
+
+.recap {
+  margin: var(--s-4) 0 var(--s-6);
+}
+
+.recap ul {
+  padding-left: 1.2em;
+}
+
+.at-a-glance {
+  margin: var(--s-6) 0;
+  padding: var(--s-4) var(--s-5);
+  border: 1px solid var(--border);
+  border-radius: var(--r-card);
+  background: var(--surface);
+}
+
+.at-a-glance-title {
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+  margin: 0 0 var(--s-3);
+}
+
+.at-a-glance-rows {
+  display: grid;
+  margin: 0;
+  font-size: var(--fs-ui);
+  line-height: 1.5;
+}
+
+.at-a-glance-row {
+  display: grid;
+  grid-template-columns: minmax(7rem, 9rem) minmax(0, 1fr);
+  gap: var(--s-4);
+  padding: var(--s-2) 0;
+  border-top: 1px solid var(--border);
+}
+
+.at-a-glance-row:first-child {
+  border-top: 0;
+}
+
+.at-a-glance-row dt {
+  color: var(--text-muted);
+  font-weight: 600;
+}
+
+.at-a-glance-row dd {
+  margin: 0;
+  color: var(--text);
+  min-width: 0;
+}
+
+.at-a-glance-row[data-row="answers"],
+.at-a-glance-row[data-row="keeps"],
+.at-a-glance-row[data-row="drops"],
+.at-a-glance-row[data-row="next-file"] {
+  background: linear-gradient(var(--sunken), var(--sunken)) left / 3px 100% no-repeat;
+  padding-left: var(--s-3);
+}
+
+@media (max-width: 479px) {
+  .at-a-glance-row {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0;
+  }
+}
+
+.unverified {
+  margin: var(--s-6) 0;
+  padding: var(--s-3) var(--s-4);
+  border: 1px dashed var(--warning);
+  border-radius: var(--r-card);
+  background: var(--warning-bg);
+  color: var(--text);
+}
+
+.unverified-label {
+  margin: 0 0 var(--s-2);
+  color: var(--warning);
+  font-size: var(--fs-meta);
+  font-weight: 600;
+}
+
+/* --- Lesson status line and previous/next (ux 4.12) ----------------------------------------- */
+
+.lesson-status {
+  margin: var(--s-9) 0 var(--s-5);
+  padding-top: var(--s-5);
+  border-top: 1px solid var(--border);
+  font-size: var(--fs-ui);
+}
+
+.lesson-status:empty {
+  display: none;
+}
+
+.lesson-status-text {
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+  margin: 0;
+  color: var(--text);
+  font-weight: 500;
+}
+
+.lesson-status-text .gf-icon {
+  color: var(--text-muted);
+}
+
+.lesson-status-text[data-tone="success"] .gf-icon {
+  color: var(--success);
+}
+
+.lesson-status-list {
+  margin: var(--s-2) 0 0;
+  padding-left: 2.5rem;
+}
+
+.lesson-status-list li {
+  margin: var(--s-1) 0;
+}
+
+.pager {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--s-4);
+  margin: var(--s-6) 0 0;
+}
+
+.pager > * {
+  min-width: 0;
+}
+
+.pager-card {
+  display: flex;
+  align-items: center;
+  gap: var(--s-3);
+  min-height: 4.5rem;
+  padding: var(--s-3) var(--s-4);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--r-card);
+  background: var(--surface);
+  color: var(--text);
+  text-decoration: none;
+}
+
+.pager-card:hover {
+  background: var(--sunken);
+  color: var(--text);
+  text-decoration: none;
+}
+
+.pager-next {
+  grid-column: 2;
+  justify-content: space-between;
+  border-color: var(--accent);
+  text-align: right;
+}
+
+.pager-next .pager-arrow {
+  color: var(--accent);
+}
+
+.pager-text {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.pager-overline {
+  color: var(--text-muted);
+  font-size: var(--fs-overline);
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.pager-title {
+  overflow: hidden;
+  font-size: 1rem;
+  font-weight: 600;
+  line-height: 1.4;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pager-meta {
+  color: var(--text-muted);
+  font-size: var(--fs-meta);
+}
+
+@media (max-width: 479px) {
+  .pager {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .pager-next {
+    grid-column: 1;
+  }
+
+  .pager-spacer {
+    display: none;
+  }
+}
+
+/* --- Home, About, badge and the progress tools (ux 12-14) ----------------------------------- */
+
+.home-progress {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s-3) var(--s-5);
+  margin: 0 0 var(--s-8);
+}
+
+.home-progress > p {
+  margin: 0;
+}
+
+.home-counts {
+  color: var(--text-muted);
+  font-size: var(--fs-ui);
+  font-variant-numeric: tabular-nums;
+}
+
+.progress-tools {
+  font-size: var(--fs-ui);
+  line-height: var(--lh-ui);
+}
+
+.progress-tools > p {
+  margin: 0 0 var(--s-4);
+}
+
+.tool-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-2);
+  margin: var(--s-3) 0;
+}
+
+.tool-status,
+.notice-status,
+.field-message {
+  margin: var(--s-2) 0;
+  min-height: 1lh;
+  color: var(--text-muted);
+  font-size: var(--fs-meta);
+}
+
+.code-output,
+.code-import {
+  display: grid;
+  gap: var(--s-2);
+  margin: var(--s-4) 0;
+  max-width: 40rem;
+}
+
+.field-label {
+  color: var(--text);
+  font-weight: 600;
+}
+
+.code-field {
+  width: 100%;
+  min-height: 4.5rem;
+  resize: vertical;
+  word-break: break-all;
+}
+
+.import-confirm {
+  margin: var(--s-3) 0;
+  padding: var(--s-4);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--r-card);
+  background: var(--surface);
+}
+
+.import-confirm-text {
+  margin: 0;
+  color: var(--text);
+}
+
+/* The segmented theme control (ux 6.5, home and About) */
+.segmented {
+  margin: var(--s-2) 0 var(--s-6);
+}
+
+.segmented-legend {
+  margin-bottom: var(--s-2);
+  padding: 0;
+  color: var(--text);
+  font-size: var(--fs-ui);
+  font-weight: 600;
+}
+
+.segmented-options {
+  display: inline-flex;
+  flex-wrap: wrap;
+  padding: 3px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--r-pill);
+  background: var(--raised);
+}
+
+.segmented input {
+  position: absolute;
+  opacity: 0;
+  width: 1px;
+  height: 1px;
+}
+
+.segmented-option {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s-2);
+  min-height: 2.25rem;
+  padding: 0 var(--s-4);
+  border-radius: var(--r-pill);
+  color: var(--text-muted);
+  font-size: var(--fs-ui);
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.segmented-option:hover {
+  color: var(--text);
+}
+
+.segmented input:checked + .segmented-option {
+  background: var(--accent);
+  color: var(--on-accent);
+}
+
+.segmented input:focus-visible + .segmented-option {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+
+/* License texts on About */
+.license-list .disclosure {
+  margin: var(--s-3) 0;
+}
+
+.license-text {
+  max-height: 24rem;
+  margin: 0;
+  padding: var(--s-3);
+  overflow: auto;
+  border: 1px solid var(--border);
+  border-radius: var(--r-control);
+  background: var(--raised);
+  color: var(--text);
+  font-size: 0.8125rem;
+  line-height: 1.5;
+  white-space: pre-wrap;
+}
+
+/* The badge requirements (ux 13) */
+.badge-state {
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+  color: var(--text);
+  font-weight: 500;
+}
+
+.badge-state .gf-icon {
+  width: 1.25rem;
+  height: 1.25rem;
+  color: var(--gold);
+}
+
+.requirements {
+  margin: 0 0 var(--s-4);
+  padding: 0;
+  list-style: none;
+}
+
+.requirements-quizzes {
+  margin: var(--s-2) 0 var(--s-3);
+  padding-left: var(--s-6);
+  font-size: var(--fs-ui);
+}
+
+.requirement {
+  margin: var(--s-2) 0;
+}
+
+.requirement-line {
+  display: flex;
+  align-items: baseline;
+  gap: var(--s-2);
+}
+
+.requirement-line > .gf-icon {
+  align-self: center;
+  color: var(--border-strong);
+}
+
+.requirement[data-done] > .requirement-line > .gf-icon {
+  color: var(--success);
+}
+
+.requirement-detail,
+.badge-context,
+.badge-honesty {
+  color: var(--text-muted);
+}
+
+.badge-honesty {
+  margin-top: var(--s-8);
+  font-size: var(--fs-meta);
+}
+
+/* The storage notice (ux 12.2) */
+.notice {
+  margin: 0 0 var(--s-6);
+  padding: var(--s-4);
+  border: 1px solid var(--warning);
+  border-left-width: 4px;
+  border-radius: var(--r-card);
+  background: var(--warning-bg);
+  color: var(--text);
+  font-size: var(--fs-ui);
+  line-height: var(--lh-ui);
+}
+
+.notice-title {
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+  margin: 0 0 var(--s-1);
+  font-weight: 600;
+}
+
+.notice-title .gf-icon {
+  color: var(--warning);
+}
+
+.notice-text {
+  margin: 0;
+}
+
+.notice .tool-row {
+  margin-bottom: 0;
+}
+
+.notice .notice-status {
+  color: var(--text);
+}

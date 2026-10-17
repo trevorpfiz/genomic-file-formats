@@ -10,3 +10,9 @@ declare module "virtual:lessons" {
   /** Every compiled content file, in folder and file-prefix order. */
   export const lessons: (Omit<CompiledPage, "sources"> & { file: string })[];
 }
+
+/** lucide-static ships one ESM module per icon, exporting the SVG markup as a string. */
+declare module "lucide-static/dist/esm/icons/*.mjs" {
+  const svg: string;
+  export default svg;
+}

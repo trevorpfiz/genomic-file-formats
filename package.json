@@ -11,13 +11,19 @@
     "test": "vp test",
     "build": "vp build",
     "e2e": "playwright test",
-    "gen:case": "echo 'gen:case: the case generator arrives in M2 (docs/PLAN.md section 13); nothing to generate yet.'",
+    "gen:case": "node scripts/generate-case.ts",
+    "lint:minutes": "node scripts/minutes-lint.ts",
     "fixtures:build": "echo 'fixtures:build: the fixture builder arrives in M2 (docs/PLAN.md D-32); nothing to build yet.'"
   },
   "dependencies": {
+    "@fontsource-variable/public-sans": "5.3.0",
+    "@fontsource/ibm-plex-mono": "5.3.0",
+    "@fontsource/source-serif-4": "5.3.0",
+    "lucide-static": "1.49.0",
     "preact": "10.29.8"
   },
   "devDependencies": {
+    "@axe-core/playwright": "4.13.0",
     "@playwright/test": "1.63.0",
     "@types/hast": "3.0.5",
     "@types/mdast": "4.0.4",

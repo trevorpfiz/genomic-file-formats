@@ -1,0 +1,786 @@
+/* The shell (ux-design.md 3, 10; docs/PLAN.md 10.1): the grid, the skip link, the sticky aside
+   with the lesson switcher, course outline, in-page TOC and theme control, the mobile top bar
+   and sheet, and the footer.
+
+   Breakpoints: >= 1280px  minmax(0,44rem) gap clamp(3rem,10vw,14rem) 18rem, container 1280px;
+                1080-1279  minmax(0,44rem) 3rem 16rem;
+                < 1080     one column of at most 44rem under a sticky 48px top bar. */
+
+/* --- Skip link (scripted in src/shell/app.ts; WCAG 2.4.1) ---------------------------------- */
+
+.skip-link {
+  position: absolute;
+  top: var(--s-2);
+  left: var(--s-2);
+  z-index: calc(var(--z-popover) + 1);
+  padding: var(--s-2) var(--s-4);
+  border-radius: var(--r-control);
+  background: var(--accent);
+  color: var(--on-accent);
+  font-size: var(--fs-ui);
+  font-weight: 600;
+  text-decoration: none;
+  transform: translateY(-200%);
+}
+
+.skip-link:focus,
+.skip-link:focus-visible {
+  transform: none;
+  color: var(--on-accent);
+}
+
+/* The static fallback (D-28) is hidden once scripts run; the shell replaces it at boot. */
+.js .fallback {
+  display: none;
+}
+
+.fallback,
+.noscript {
+  max-width: 40rem;
+}
+
+.noscript {
+  margin: 0;
+  padding: var(--s-3) var(--s-5);
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+}
+
+/* --- Grid ----------------------------------------------------------------------------------- */
+
+.layout {
+  display: grid;
+  grid-template-columns: minmax(0, var(--content-max)) var(--aside-width);
+  column-gap: clamp(3rem, 10vw, 14rem);
+  justify-content: center;
+  max-width: var(--container-max);
+  margin: 0 auto;
+  padding: var(--s-8) 40px var(--s-10);
+}
+
+main {
+  min-width: 0;
+}
+
+@media (max-width: 1279px) {
+  .layout {
+    grid-template-columns: minmax(0, var(--content-max)) 16rem;
+    column-gap: 3rem;
+    padding-inline: 32px;
+  }
+}
+
+@media (max-width: 1079px) {
+  .layout {
+    grid-template-columns: minmax(0, var(--content-max));
+    padding: var(--s-6) 32px var(--s-10);
+  }
+
+  .aside {
+    display: none;
+  }
+}
+
+@media (max-width: 767px) {
+  .layout {
+    padding-inline: 20px;
+  }
+}
+
+@media (max-width: 479px) {
+  .layout {
+    padding-inline: 16px;
+  }
+}
+
+/* --- Aside (ux 10.1-10.2) ------------------------------------------------------------------- */
+
+.aside {
+  min-width: 0;
+}
+
+.aside-inner {
+  position: sticky;
+  top: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-4);
+  max-height: calc(100dvh - 48px);
+  font-size: var(--fs-ui);
+  line-height: var(--lh-ui);
+}
+
+.aside-inner.is-expanded > [data-toc] {
+  display: none;
+}
+
+/* The lesson switcher card: one disclosure button, the 2px course progress bar, the outline. */
+.switcher {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  border: 1px solid var(--border);
+  border-radius: var(--r-card);
+  background: var(--surface);
+  overflow: hidden;
+}
+
+.is-expanded > .switcher {
+  flex: 1 1 auto;
+  border-color: var(--border-strong);
+}
+
+button.switcher-toggle {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s-2);
+  width: 100%;
+  min-height: 3.75rem;
+  padding: var(--s-3) 14px calc(var(--s-3) + 2px);
+  border: 0;
+  border-radius: 0;
+  background: none;
+  color: var(--text);
+  text-align: left;
+}
+
+button.switcher-toggle:hover {
+  background: var(--sunken);
+}
+
+button.switcher-toggle:focus-visible {
+  outline-offset: -3px;
+  border-radius: var(--r-card);
+}
+
+.switcher-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.switcher-overline {
+  color: var(--text-muted);
+  font-size: 0.8125rem;
+  font-weight: 400;
+  line-height: 1.4;
+}
+
+.switcher-title {
+  color: var(--text);
+  font-size: var(--fs-ui);
+  font-weight: 600;
+  line-height: 1.35;
+}
+
+.switcher-chevron {
+  color: var(--text-muted);
+  transition: transform var(--dur-2) var(--ease);
+}
+
+.switcher-toggle[aria-expanded="true"] .switcher-chevron {
+  transform: rotate(180deg);
+}
+
+.switcher-progress {
+  position: relative;
+  height: 2px;
+  margin: 0 14px;
+  background: var(--sunken);
+  flex: none;
+}
+
+.switcher-progress-fill {
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: calc(var(--progress, 0) * 100%);
+  background: var(--accent);
+}
+
+.switcher-panel {
+  min-height: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
+  padding: var(--s-2) var(--s-2) var(--s-3);
+}
+
+/* --- Course outline (ux 10.1) ---------------------------------------------------------------- */
+
+.outline-section + .outline-section,
+.outline-list-badge {
+  margin-top: var(--s-3);
+}
+
+.outline-section-title {
+  margin: var(--s-2) var(--s-2) var(--s-1);
+  color: var(--text-muted);
+  font-size: 0.8125rem;
+  font-weight: 500;
+  line-height: 1.4;
+}
+
+.outline-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.outline-row {
+  position: relative;
+  display: flex;
+  align-items: flex-start;
+  gap: var(--s-2);
+  min-height: 2rem;
+  padding: var(--s-1) var(--s-2);
+  border-radius: var(--r-control);
+  color: var(--text);
+  font-size: var(--fs-ui);
+  line-height: 1.45;
+  text-decoration: none;
+}
+
+a.outline-row:hover {
+  background: var(--sunken);
+  color: var(--text);
+  text-decoration: none;
+}
+
+.outline-row[aria-current="page"] {
+  background: var(--sunken);
+  font-weight: 600;
+}
+
+.outline-row[aria-current="page"]::before {
+  content: "";
+  position: absolute;
+  inset: 4px auto 4px 0;
+  width: 2px;
+  border-radius: 1px;
+  background: var(--text);
+}
+
+.outline-row.is-planned {
+  color: var(--text-muted);
+}
+
+.outline-status {
+  position: relative;
+  display: inline-flex;
+  flex: none;
+  margin-top: 0.15em;
+  color: var(--border-strong);
+}
+
+.outline-status .gf-icon {
+  width: 1rem;
+  height: 1rem;
+}
+
+.outline-status[data-status="in-progress"] {
+  color: var(--accent);
+}
+
+.outline-status[data-status="complete"] {
+  color: var(--success);
+}
+
+.outline-status[data-status="planned"] {
+  color: var(--text-muted);
+}
+
+.outline-title {
+  flex: 1;
+  min-width: 0;
+}
+
+.outline-kind {
+  margin-right: var(--s-1);
+  color: var(--text-muted);
+}
+
+.outline-extra {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+}
+
+.outline-extra .pill {
+  min-height: 22px;
+  padding: 0 8px;
+  font-size: 0.8125rem;
+}
+
+.outline-note {
+  color: var(--text-muted);
+  font-size: var(--fs-meta);
+}
+
+.outline-minutes {
+  flex: none;
+  color: var(--text-muted);
+  font-size: var(--fs-meta);
+  font-variant-numeric: tabular-nums;
+}
+
+.outline-badge .outline-status {
+  color: var(--text-muted);
+}
+
+.outline-badge [data-earned] .outline-status {
+  color: var(--gold);
+}
+
+.outline-lock {
+  position: absolute;
+  right: -0.35rem;
+  bottom: -0.3rem;
+  width: 0.65rem !important;
+  height: 0.65rem !important;
+  border-radius: 2px;
+  background: var(--surface);
+}
+
+/* Home and Not found: the outline always expanded, with minutes (ux 14). */
+.outline-home {
+  margin: 0 0 var(--s-6);
+  font-size: var(--fs-ui);
+}
+
+.outline-home .outline-section {
+  padding: var(--s-2) 0 var(--s-3);
+  border-top: 1px solid var(--border);
+}
+
+.outline-home .outline-section-title {
+  margin-inline: 0;
+  color: var(--text);
+  font-size: var(--fs-ui);
+  font-weight: 600;
+}
+
+.outline-home .outline-row {
+  padding-inline: var(--s-1) var(--s-2);
+}
+
+/* --- In-page TOC with scroll-spy (ux 10.2) ---------------------------------------------------- */
+
+.toc {
+  min-height: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
+}
+
+.toc-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  border-left: 1px solid var(--border);
+}
+
+.toc-link {
+  position: relative;
+  display: flex;
+  align-items: flex-start;
+  gap: var(--s-2);
+  min-height: 2rem;
+  padding: 6px 0 6px 12px;
+  color: var(--text-muted);
+  font-size: 0.90625rem; /* 14.5px */
+  line-height: 1.38;
+  text-decoration: none;
+}
+
+.toc-link:hover {
+  color: var(--text);
+  text-decoration: none;
+}
+
+.toc-link::before {
+  content: "";
+  position: absolute;
+  inset: 0 auto 0 -1px;
+  width: 2px;
+  background: var(--text);
+  opacity: 0;
+  transform: scaleY(0.4);
+  transition:
+    opacity var(--dur-1) var(--ease),
+    transform var(--dur-1) var(--ease);
+}
+
+.toc-link[aria-current="location"] {
+  color: var(--text);
+  font-weight: 600;
+}
+
+.toc-link[aria-current="location"]::before {
+  opacity: 1;
+  transform: none;
+}
+
+.toc-link:focus-visible {
+  outline-offset: 0;
+  border-radius: 2px;
+}
+
+.toc-text {
+  flex: 1;
+  min-width: 0;
+}
+
+.toc-status {
+  display: inline-flex;
+  flex: none;
+  margin-top: 0.15em;
+  color: var(--border-strong);
+}
+
+.toc-status .gf-icon {
+  width: 14px;
+  height: 14px;
+}
+
+.toc-status[data-tone="success"] {
+  color: var(--success);
+}
+
+.toc-status[data-tone="error"] {
+  color: var(--error);
+}
+
+/* --- Theme control (ux 6.5) ------------------------------------------------------------------ */
+
+.aside-theme {
+  margin-top: auto;
+  padding-top: var(--s-2);
+}
+
+.menu-button {
+  position: relative;
+  display: inline-block;
+}
+
+button.menu-button-trigger {
+  min-height: 2rem;
+  padding: 0.25rem 0.6rem;
+  border-color: var(--border);
+  background: transparent;
+  color: var(--text-muted);
+  font-size: var(--fs-meta);
+}
+
+button.menu-button-trigger:hover {
+  border-color: var(--border-strong);
+  color: var(--text);
+}
+
+.theme-menu-icon button.menu-button-trigger {
+  width: 2.5rem;
+  height: 2.5rem;
+  padding: 0;
+  font-size: 1.125rem;
+  color: var(--text);
+}
+
+.menu-list {
+  position: absolute;
+  bottom: calc(100% + 4px);
+  left: 0;
+  z-index: var(--z-popover);
+  min-width: 10rem;
+  margin: 0;
+  padding: var(--s-1);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--r-control);
+  background: var(--raised);
+  box-shadow: var(--shadow-pop);
+  list-style: none;
+}
+
+.theme-menu-icon .menu-list {
+  top: calc(100% + 4px);
+  right: 0;
+  bottom: auto;
+  left: auto;
+}
+
+.menu-item {
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+  min-height: 2rem;
+  padding: var(--s-1) var(--s-2);
+  border-radius: 6px;
+  color: var(--text);
+  font-size: var(--fs-ui);
+  cursor: pointer;
+}
+
+.menu-item:hover,
+.menu-item:focus {
+  background: var(--sunken);
+}
+
+.menu-item:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: -2px;
+}
+
+.menu-item > span {
+  flex: 1;
+}
+
+.menu-item-check {
+  visibility: hidden;
+  color: var(--accent);
+}
+
+.menu-item[aria-checked="true"] {
+  font-weight: 600;
+}
+
+.menu-item[aria-checked="true"] .menu-item-check {
+  visibility: visible;
+}
+
+/* --- Mobile top bar and sheet (ux 10.3) ------------------------------------------------------ */
+
+.topbar {
+  position: sticky;
+  top: 0;
+  z-index: var(--z-topbar);
+  height: var(--topbar-height);
+  border-bottom: 1px solid var(--border);
+  background: var(--bg);
+}
+
+@media (min-width: 1080px) {
+  .topbar {
+    display: none;
+  }
+}
+
+.topbar-inner {
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+  height: 100%;
+  max-width: calc(var(--content-max) + 64px);
+  margin: 0 auto;
+  padding: 0 var(--s-3) 0 var(--s-2);
+}
+
+button.topbar-menu {
+  flex: 1;
+  justify-content: flex-start;
+  min-width: 0;
+  min-height: 2.5rem;
+  padding: 0 var(--s-2);
+  border-color: transparent;
+  background: none;
+  color: var(--text);
+  font-size: var(--fs-ui);
+}
+
+button.topbar-menu:hover {
+  background: var(--sunken);
+}
+
+.topbar-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.topbar-count {
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+@media (max-width: 359px) {
+  .topbar-count {
+    display: none;
+  }
+}
+
+.topbar-chevron {
+  color: var(--text-muted);
+}
+
+dialog.sheet {
+  width: 100%;
+  max-width: none;
+  max-height: 85dvh;
+  margin: 0 auto auto;
+  padding: 0;
+  border: 0;
+  border-bottom: 1px solid var(--border-strong);
+  border-radius: 0 0 var(--r-dialog) var(--r-dialog);
+  background: var(--surface);
+  color: var(--text-body);
+  box-shadow: var(--shadow-pop);
+  font-size: var(--fs-ui);
+  line-height: var(--lh-ui);
+}
+
+dialog.sheet[open] {
+  display: flex;
+  flex-direction: column;
+  animation: gf-sheet var(--dur-2) var(--ease);
+}
+
+dialog.sheet::backdrop {
+  background: rgb(0 0 0 / 0.4);
+}
+
+@keyframes gf-sheet {
+  from {
+    transform: translateY(-16px);
+    opacity: 0;
+  }
+}
+
+.sheet-inner {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  max-width: calc(var(--content-max) + 32px);
+  width: 100%;
+  margin: 0 auto;
+  padding: var(--s-3) var(--s-4) var(--s-4);
+}
+
+.sheet-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s-2);
+  margin-bottom: var(--s-3);
+}
+
+.sheet-title {
+  margin: 0;
+  color: var(--text);
+  font-weight: 600;
+}
+
+button.sheet-close {
+  width: 2.5rem;
+  min-height: 2.5rem;
+  padding: 0;
+  font-size: 1.125rem;
+}
+
+.sheet-tabs {
+  display: flex;
+  gap: var(--s-1);
+  margin-bottom: var(--s-3);
+  padding: 3px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--r-pill);
+  background: var(--raised);
+}
+
+button.sheet-tab {
+  flex: 1;
+  min-height: 2.25rem;
+  border: 0;
+  border-radius: var(--r-pill);
+  background: none;
+  color: var(--text-muted);
+}
+
+button.sheet-tab[aria-selected="true"] {
+  background: var(--accent);
+  color: var(--on-accent);
+  font-weight: 600;
+}
+
+.sheet-panel {
+  min-height: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
+}
+
+/* --- Footer (ux 4) --------------------------------------------------------------------------- */
+
+.site-footer {
+  max-width: var(--container-max);
+  margin: 0 auto;
+  padding: var(--s-6) 40px var(--s-8);
+  border-top: 1px solid var(--border);
+  color: var(--text-muted);
+  font-size: var(--fs-meta);
+  line-height: 1.5;
+}
+
+.site-footer:empty {
+  display: none;
+}
+
+.site-footer p {
+  margin: 0 0 var(--s-1);
+}
+
+.footer-status {
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+  color: var(--text);
+}
+
+.footer-status[data-tone="success"] .gf-icon {
+  color: var(--success);
+}
+
+.footer-status[data-tone="warning"] .gf-icon {
+  color: var(--warning);
+}
+
+.footer-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0 var(--s-2);
+}
+
+.footer-links a {
+  color: var(--text-muted);
+}
+
+.footer-links a:hover {
+  color: var(--text);
+}
+
+@media (max-width: 767px) {
+  .site-footer {
+    padding-inline: 20px;
+  }
+}
+
+/* --- Motion --------------------------------------------------------------------------------- */
+
+@media (prefers-reduced-motion: reduce) {
+  .toc-link::before,
+  .switcher-chevron,
+  .disclosure-chevron {
+    transition: none;
+  }
+
+  dialog.sheet[open] {
+    animation: none;
+  }
+}
+
+@media (forced-colors: active) {
+  .outline-row[aria-current="page"],
+  .toc-link[aria-current="location"] {
+    outline: 2px solid Highlight;
+  }
+
+  .switcher-progress-fill {
+    background: Highlight;
+  }
+}

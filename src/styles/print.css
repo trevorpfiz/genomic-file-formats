@@ -1,0 +1,135 @@
+/* Print (ux-design.md 15; docs/PLAN.md 10.4). tokens.css forces the light values. The aside,
+   bars, toolbars and controls are hidden; READ MORE cards open (src/shell/app.ts sets `open`
+   on beforeprint and restores it afterwards); snippets and code wrap; exercises print without
+   answers unless already completed, with a pointer back to the interactive page. */
+
+@media print {
+  @page {
+    margin: 16mm;
+  }
+
+  html {
+    scroll-padding-top: 0;
+  }
+
+  body {
+    background: #fff;
+    font-size: 10.5pt;
+    line-height: 1.45;
+  }
+
+  .skip-link,
+  .topbar,
+  .aside,
+  .site-footer,
+  .notice-slot,
+  dialog.sheet,
+  .pager,
+  .lesson-status-list,
+  .code-copy,
+  .card-actions,
+  .card-confirm,
+  .card-howto,
+  .menu-button,
+  .segmented,
+  .progress-tools,
+  .snippet-toolbar,
+  .quiz-actions,
+  .tool-row {
+    display: none !important;
+  }
+
+  .layout {
+    display: block;
+    max-width: none;
+    padding: 0;
+  }
+
+  .print-header {
+    display: block;
+    margin: 0 0 6mm;
+    padding-bottom: 2mm;
+    border-bottom: 0.5pt solid var(--border-strong);
+    color: var(--text-muted);
+    font-size: 8.5pt;
+  }
+
+  h1,
+  h2,
+  h3 {
+    break-after: avoid;
+  }
+
+  .page > h1,
+  .page h1#page-title {
+    font-size: 22pt;
+  }
+
+  .prose h2 {
+    margin-top: 8mm;
+    font-size: 15pt;
+  }
+
+  pre,
+  code,
+  .code-block pre {
+    font-size: 8.5pt;
+  }
+
+  .code-block pre,
+  .license-text {
+    max-height: none;
+    overflow: visible;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+  }
+
+  .table-scroll {
+    overflow: visible;
+  }
+
+  .callout,
+  .disclosure,
+  .at-a-glance,
+  .exercise-card,
+  .code-block,
+  figure {
+    break-inside: avoid;
+  }
+
+  .disclosure-chevron {
+    display: none;
+  }
+
+  /* Exercises: no answers unless completed; a pointer back to the interactive page. */
+  .exercise-card:not([data-state="correct"]):not([data-state="revealed"]) .card-feedback,
+  .exercise-card:not([data-state="correct"]):not([data-state="revealed"]) .card-hints {
+    display: none !important;
+  }
+
+  .exercise-card[data-print-url]::after {
+    content: "Interactive in the course: " attr(data-print-url);
+    display: block;
+    margin-top: 3mm;
+    color: var(--text-muted);
+    font-size: 8pt;
+    overflow-wrap: anywhere;
+  }
+
+  /* External links print their address; course links do not. */
+  .prose a[href^="http"]::after {
+    content: " (" attr(href) ")";
+    width: auto;
+    height: auto;
+    background: none;
+    -webkit-mask: none;
+    mask: none;
+    color: var(--text-muted);
+    font-size: 0.85em;
+    overflow-wrap: anywhere;
+  }
+
+  a {
+    color: var(--text);
+  }
+}

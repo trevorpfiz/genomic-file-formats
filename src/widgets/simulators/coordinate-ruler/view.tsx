@@ -1,17 +1,13 @@
 // M0 placeholder view for the coordinate ruler, a Preact island (D-21): controls, then the
-// readout, then the text view. JSX goes through Vite 8's Oxc transform (jsxImportSource: preact).
+// readout, then the text view. M3 replaces it. JSX goes through Vite 8's Oxc transform
+// (jsxImportSource: preact).
 import { useEffect, useMemo, useState } from "preact/hooks";
-import type { SimulatorExercise } from "../../../exercises/types.ts";
+import type { SimulatorViewProps } from "../types.ts";
 import { rulerModel, type RulerAction, type RulerState } from "./model.ts";
 
 const checks: Record<string, (state: RulerState, args?: unknown) => boolean> = rulerModel.goalChecks;
 
-export interface RulerViewProps {
-  exercise: SimulatorExercise;
-  onGoal: (goalId: string) => void;
-}
-
-export function RulerView({ exercise, onGoal }: RulerViewProps) {
+export function RulerView({ exercise, onGoal }: SimulatorViewProps) {
   const [state, setState] = useState(() => rulerModel.init(exercise.init));
   const reached = useMemo(
     () => exercise.goals.filter((g) => checks[g.when]?.(state, g.args)),
@@ -25,7 +21,6 @@ export function RulerView({ exercise, onGoal }: RulerViewProps) {
 
   return (
     <div class="simulator ruler">
-      <p class="prompt">{exercise.prompt}</p>
       <div class="controls">
         <button type="button" onClick={() => dispatch({ type: "step", by: -1 })}>
           Previous base
