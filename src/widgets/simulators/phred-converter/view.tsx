@@ -1,7 +1,7 @@
 // The Phred converter island (docs/PLAN.md 5 L06.2, 7.5; found EX-05; seq EX-07). Controls: a
 // quality character, a Q slider and an error probability, bound both ways at offset 33, with
-// chips for the four-level quality bins (the NovaSeq 6000 alphabet, D-18; labelled without the
-// instrument name while V-06 is open); then a quality string whose expected errors add up in
+// chips for the four-level quality bins (the case data's alphabet, D-18; labelled without an
+// instrument name, since V-06 is not verified); then a quality string whose expected errors add up in
 // the text view (character, Q, P, bases, sum). The decade grid is decorative: every fact in it
 // is in the readout and the table.
 import { useState } from "preact/hooks";
@@ -15,7 +15,7 @@ import {
   isQualityChar,
   MAX_Q,
   MAX_QUALITY_LENGTH,
-  NOVASEQ_6000_BINS,
+  CASE_QUALITY_BINS,
   phred64Char,
   phredConverterModel,
   qualityReadout,
@@ -25,7 +25,7 @@ import {
 
 /** P as the field shows it: plain decimals, or exponent notation below 0.000001. */
 const pFieldText = (p: number): string => (p < 1e-6 ? p.toExponential(2) : formatP(p));
-const BIN_CHARS = new Set(NOVASEQ_6000_BINS.map((b) => b.char));
+const BIN_CHARS = new Set(CASE_QUALITY_BINS.map((b) => b.char));
 
 export function PhredConverterView(props: SimulatorViewProps) {
   const { exercise, card } = props;
@@ -86,7 +86,7 @@ export function PhredConverterView(props: SimulatorViewProps) {
           <span class="sim-presets-label" aria-hidden="true">
             Four-level bins
           </span>
-          {NOVASEQ_6000_BINS.map((bin) => (
+          {CASE_QUALITY_BINS.map((bin) => (
             <button
               key={bin.char}
               type="button"

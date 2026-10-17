@@ -464,7 +464,7 @@ describe("phred-converter", () => {
     expect(phredConverterModel.goalChecks.showsQ(s, { q: 40 })).toBe(true);
   });
 
-  test("the four NovaSeq 6000 bins decode to Q2, Q11, Q25 and Q37 (D-18)", () => {
+  test("the case data's four bins decode to Q2, Q11, Q25 and Q37 (D-18)", () => {
     const s = phred(["#", ",", ":", "F"].map((char) => ({ type: "char", char })));
     expect(s.q).toBe(37);
     expect(phredConverterModel.goalChecks.decoded(s, { chars: "#,:F" })).toBe(true);

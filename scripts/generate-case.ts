@@ -11,8 +11,8 @@
 //
 // Deterministic and offline: the GRCh38 bases the six read pairs need are pinned below (two
 // windows of the verified slice, with their MD5s); haplotype alleles follow case.md 3.2; read
-// names follow D-18; qualities come from a seeded mulberry32 stream over the 4-level NovaSeq
-// 6000 alphabet. Node runs this file directly (type stripping), so it uses only erasable syntax.
+// names follow D-18; qualities come from a seeded mulberry32 stream over the course's 4-level
+// quality alphabet (a design choice; see V-06). Node runs this file directly (type stripping), so it uses only erasable syntax.
 import { createHash } from "node:crypto";
 import { readFileSync, writeFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
@@ -273,7 +273,9 @@ export function render(): string {
   w('//   bases and R2 the reverse complement of the last 150; on a "-" fragment they swap;');
   w("// - names (D-18): A00123:8:H7KJ2DSXY:<lane>:<tile>:<x>:<y>, lane 1 (the files are _L001_), with");
   w("//   comment <read>:N:0:<i7>+<i5> and an illustrative dual index per sample;");
-  w("// - qualities: the 4-level NovaSeq 6000 alphabet (D-18; foundations.md 3.4). For each base a");
+  w(
+    "// - qualities: the course's 4-level quality alphabet (D-18; a design choice, see V-06). For each base a",
+  );
   w("//   mulberry32 stream seeded with 0x50303432 + 2i (R1) or + 2i + 1 (R2) gives r in [0, 1):");
   w("//   r < 0.86 -> F (Q37), r < 0.95 -> : (Q25), else , (Q11). # (Q2) is part of the alphabet but no");
   w("//   base here draws it.");

@@ -24,8 +24,12 @@ export const MIN_Q = 0;
 export const MAX_Q = 93;
 /** Longer than a 2×150 read pair's qualities would ever need here. */
 export const MAX_QUALITY_LENGTH = 300;
-/** The 4-level NovaSeq 6000 alphabet since NVCS v1.1 (found 3.4 correction 7; D-18). */
-export const NOVASEQ_6000_BINS: readonly { char: string; q: number }[] = [
+/**
+ * The four-level quality alphabet of the case data (D-18). Its values are a course design
+ * choice; which instruments write exactly these bins is not verified (V-06), so the UI never
+ * names an instrument.
+ */
+export const CASE_QUALITY_BINS: readonly { char: string; q: number }[] = [
   { char: "#", q: 2 },
   { char: ",", q: 11 },
   { char: ":", q: 25 },

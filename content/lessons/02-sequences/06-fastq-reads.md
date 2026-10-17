@@ -73,13 +73,7 @@ The lab draws blood from Noa and both parents. Each exome arrives as two files o
 ::::read-more{title="Why 33, and older encodings"}
 ASCII 33 (`!`) is the first printable character after the space, so Phred+33 runs from Q0 (`!`) to Q93 (`~`). Early Solexa files used odds-based scores, −10·log10(P/(1−P)), which can be negative, written with offset 64. Illumina pipelines 1.3 to 1.7 wrote Phred+64; since CASAVA 1.8, Illumina writes Phred+33. A Phred+64 file read as Phred+33 shows implausible scores such as Q71. <!-- src: seq §11, EX-08; found §3.4; Biopython 1.88 QualityIO -->
 
-:::unverified{ref="V-06"}
-Binning depends on the instrument and its control software. NovaSeq 6000 output since 2019 uses Q2, Q11, Q25 and Q37; NovaSeq X uses three other bins. <!-- src: found §3.4 correction 7 (dada2 #791; NovaSeq X from a search summary only) -->
-:::
-
-:::unverified{ref="V-08"}
-PacBio HiFi reads can reach Q93, the top of the Phred+33 range. <!-- src: seq EX-08 (from memory) -->
-:::
+PacBio's ccs software, which makes HiFi reads, limits base qualities to Q0 to Q93, so its highest character is `~`, the top of the Phred+33 range. Since ccs 7.0 (SMRT Link 12.0), it bins qualities into seven values and writes every value from Q40 to Q93 as Q40 (`I`), so current HiFi files contain no `~`. <!-- src: V-08 verified 2026-10-17: PacBio unanimity 6f11a13 src/main/ccs.cpp L100 (QV clamped to 0..93, written as QV+33); pbcopper QualityValue (MAX = 93); PacificBiosciences/ccs docs faq/qv-binning (top bin [40, 93] written as Q40) and changelog 7.0.0 (SMRT Link 12.0) -->
 ::::
 
 ## Anatomy of a FASTQ record

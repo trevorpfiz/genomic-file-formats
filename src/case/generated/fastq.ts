@@ -10,7 +10,7 @@
 //   bases and R2 the reverse complement of the last 150; on a "-" fragment they swap;
 // - names (D-18): A00123:8:H7KJ2DSXY:<lane>:<tile>:<x>:<y>, lane 1 (the files are _L001_), with
 //   comment <read>:N:0:<i7>+<i5> and an illustrative dual index per sample;
-// - qualities: the 4-level NovaSeq 6000 alphabet (D-18; foundations.md 3.4). For each base a
+// - qualities: the course's 4-level quality alphabet (D-18; a design choice, see V-06). For each base a
 //   mulberry32 stream seeded with 0x50303432 + 2i (R1) or + 2i + 1 (R2) gives r in [0, 1):
 //   r < 0.86 -> F (Q37), r < 0.95 -> : (Q25), else , (Q11). # (Q2) is part of the alphabet but no
 //   base here draws it.
