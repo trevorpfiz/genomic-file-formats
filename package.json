@@ -1,6 +1,6 @@
 {
   "name": "genomic-file-formats",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "private": true,
   "description": "An interactive course on genomic file formats, shipped as one self-contained HTML file.",
   "license": "MIT",
